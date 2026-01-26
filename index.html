@@ -161,6 +161,17 @@
       #cameraCard .cam-actions{grid-template-columns:1fr !important;}
       #cameraCard .cam-actions .btn{width:100% !important;}
     }
+
+    /* v39 camera layout */
+    #cameraCard .cam-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    #cameraCard .cam-actions button{width:100%;}
+    #cameraCard .toggles{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;}
+    #cameraCard .toggles label{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--muted);}
+    #cameraCard .toggles input{width:18px;height:18px;}
+    @media (max-width:380px){
+      #cameraCard .cam-actions{grid-template-columns:1fr;}
+      #cameraCard .toggles{grid-template-columns:1fr;}
+    }
 </style>
 </head>
 <body>
@@ -169,7 +180,7 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <div>
         <div class="t">Escáner de Artículos</div>
-        <div style="font-size:12px;opacity:.86;">Versión 3.8</div>
+        <div style="font-size:12px;opacity:.86;">Versión 3.9</div>
       </div>
     </div>
     <div class="h-right" style="display:flex;align-items:center;gap:10px;"><div style="opacity:.9;font-size:12px;">Caducidad + Clave + Cantidad</div><button id="btnMode" class="btn-primary" type="button" style="padding:10px 12px;border-radius:12px;font-size:12px;white-space:nowrap;"><i class="fa-solid fa-toggle-on"></i> Automático</button></div>
@@ -205,37 +216,41 @@
       <div class="card-h">
         <div class="ttl"><i class="fa-solid fa-camera"></i> Escaneo con Cámara</div>
       </div>
-<div class="cam-actions">
-        <button class="btn-ok start" id="btnCamStart" type="button"><i class="fa-solid fa-qrcode"></i> Iniciar Escaneo</button>
+
+      <div class="video-wrap">
+        <video id="video" playsinline muted></video>
+        <div class="scan-area"></div>
+        <div class="scan-line"></div>
+      </div>
+
+      <div class="filters auto-month" style="margin-top:12px;">
+        <div style="flex:1;min-width:220px;">
+          <label>Caducidad (Mes)</label>
+          <select id="caducidadAuto">
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-ok start" id="btnCamStart" type="button" style="margin-top:12px;width:100%;">
+        <i class="fa-solid fa-qrcode"></i> Iniciar Escaneo
+      </button>
+
+      <div class="cam-actions" style="margin-top:10px;">
         <button class="btn-muted stop" id="btnCamStop" type="button"><i class="fa-solid fa-stop"></i> Detener</button>
         <button class="btn-primary" id="btnTorch" type="button" style="display:none;"><i class="fa-solid fa-lightbulb"></i> Luz</button>
       </div>
 
-      <div class="toggles">
+      <div class="toggles" style="margin-top:12px;">
         <label><input id="optAuto" type="checkbox" checked> Auto-agregar al detectar</label>
         <label><input id="optSound" type="checkbox" checked> Sonido</label>
         <label><input id="optVib" type="checkbox" checked> Vibración</label>
       </div>
 
-      <div class="status">
+      <div class="status" style="margin-top:10px;">
         Estado: <strong id="camStatus">detenido</strong> &nbsp;&nbsp;|&nbsp;&nbsp;
         Último: <strong id="lastCode">—</strong>
-      </div>
-
-      <div class="video-wrap">
-        <video id="video" playsinline muted></video>
-        <div class="scan-area"></div>
-        
-        <div class="filters auto-month">
-          <div style="min-width:220px;flex:1;">
-            <label>Caducidad (Mes)</label>
-            <select id="caducidadAuto">
-              <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
-              <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
-            </select>
-          </div>
-        </div>
-<div class="scan-line"></div>
       </div>
     </section>
 
