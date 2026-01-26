@@ -1,11 +1,13 @@
-const CACHE_NAME = "scanner-cache-v3";
+const CACHE_NAME = "scanner-cache-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./sw.js",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
 ];
 
 self.addEventListener("install", (event) => {

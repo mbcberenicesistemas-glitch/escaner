@@ -11,7 +11,7 @@
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- ZXing (lector de códigos por cámara) -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -82,6 +82,16 @@
       .results-header { flex-direction: column; align-items: flex-start; }
       .filter-row { flex-direction: column; align-items: flex-start; }
     }
+  
+    .settings-row{
+      display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 10px;
+      background:#f8f9fa; border:1px solid #eaeaea; padding:10px 12px; border-radius:8px;
+      font-size:.95rem;
+    }
+    .setting{ display:flex; align-items:center; gap:8px; user-select:none; }
+    .setting input{ width:auto; }
+    .camera-status{ margin:6px 0 0; font-size:.9rem; color:#2c3e50; opacity:.85; }
+
   </style>
 </head>
 <body>
@@ -134,6 +144,14 @@
         <button id="camera-scan-btn" class="scan-btn" type="button"><i class="fas fa-qrcode"></i> Iniciar Escaneo</button>
         <button id="camera-stop-btn" class="filter-btn" type="button"><i class="fas fa-stop"></i> Detener</button>
       </div>
+
+
+      <div class="settings-row">
+        <label class="setting"><input type="checkbox" id="opt-autoadd" checked> Auto-agregar al detectar</label>
+        <label class="setting"><input type="checkbox" id="opt-sound" checked> Sonido</label>
+        <label class="setting"><input type="checkbox" id="opt-vibrate" checked> Vibración</label>
+      </div>
+      <div class="camera-status" id="camera-status">Estado: detenido</div>
 
       <div class="camera-wrap">
         <video id="camera-video" playsinline muted></video>
@@ -402,54 +420,112 @@
       showNotification("CSV descargado", "success");
     }
 
-    // --- Cámara: mejorado para códigos de barras 1D + auto-agregar + beep + vibración ---
+    
+    // --- Cámara: lector de códigos de barras (1D/2D) + auto-agregar + beep + vibración ---
     const cameraScanBtn = document.getElementById('camera-scan-btn');
     const cameraStopBtn = document.getElementById('camera-stop-btn');
     const cameraVideo = document.getElementById('camera-video');
+    const cameraStatus = document.getElementById('camera-status');
+
+    const optAutoAdd = document.getElementById('opt-autoadd');
+    const optSound = document.getElementById('opt-sound');
+    const optVibrate = document.getElementById('opt-vibrate');
+
+    function loadOptions() {
+      try {
+        const raw = JSON.parse(localStorage.getItem('scannerOptions') || '{}');
+        if (typeof raw.autoAdd === 'boolean') optAutoAdd.checked = raw.autoAdd;
+        if (typeof raw.sound === 'boolean') optSound.checked = raw.sound;
+        if (typeof raw.vibrate === 'boolean') optVibrate.checked = raw.vibrate;
+      } catch {}
+    }
+    function saveOptions() {
+      const raw = { autoAdd: optAutoAdd.checked, sound: optSound.checked, vibrate: optVibrate.checked };
+      localStorage.setItem('scannerOptions', JSON.stringify(raw));
+    }
+    [optAutoAdd, optSound, optVibrate].forEach(el => el.addEventListener('change', saveOptions));
+    loadOptions();
+
+    function setCamStatus(text) {
+      if (cameraStatus) cameraStatus.textContent = `Estado: ${text}`;
+    }
+
+    // Beep por WebAudio (más confiable en Android que <audio> en callbacks async)
+    let audioCtx = null;
+    function ensureAudio() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      } catch {}
+    }
+    function playBeep() {
+      if (!optSound.checked) return;
+      try {
+        ensureAudio();
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.value = 880;
+        g.gain.value = 0.12;
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start();
+        setTimeout(() => { try { o.stop(); } catch {} }, 110);
+      } catch {}
+    }
 
     let codeReader = null;
     let cameraActive = false;
     let controls = null;
 
-    async function tryApplyZoom(zoomValue = 2.0) {
+    async function applyAdvancedConstraints(track) {
       try {
-        const stream = cameraVideo.srcObject;
-        if (!stream) return;
-        const [track] = stream.getVideoTracks();
-        if (!track) return;
+        const caps = track.getCapabilities ? track.getCapabilities() : {};
+        const adv = [];
 
-        const caps = track.getCapabilities ? track.getCapabilities() : null;
-        if (!caps || !caps.zoom) return;
+        // En algunos Android mejora mucho el enfoque continuo
+        if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+          adv.push({ focusMode: 'continuous' });
+        }
+        if (caps.exposureMode && Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) {
+          adv.push({ exposureMode: 'continuous' });
+        }
+        if (caps.whiteBalanceMode && Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) {
+          adv.push({ whiteBalanceMode: 'continuous' });
+        }
 
-        const settings = track.getSettings ? track.getSettings() : {};
-        const minZ = caps.zoom.min ?? 1.0;
-        const maxZ = caps.zoom.max ?? zoomValue;
-        const z = Math.max(minZ, Math.min(maxZ, zoomValue));
-        if (settings.zoom === z) return;
+        // Zoom moderado si existe
+        if (caps.zoom) {
+          const z = Math.max(caps.zoom.min ?? 1.0, Math.min(caps.zoom.max ?? 2.0, 2.0));
+          adv.push({ zoom: z });
+        }
 
-        await track.applyConstraints({ advanced: [{ zoom: z }] });
-      } catch {
-        // silencioso
-      }
+        if (adv.length) await track.applyConstraints({ advanced: adv });
+      } catch {}
     }
 
     async function startCameraScan() {
       if (cameraActive) return;
 
+      // Desbloquea audio por gesto del usuario
+      ensureAudio();
+
       if (!window.ZXing) {
-        showNotification("No cargó ZXing. Revisa internet/HTTPS.", "error");
+        showNotification("No cargó el lector (ZXing). Revisa tu conexión o recarga la página.", "error");
+        setCamStatus("ZXing no cargó");
         return;
       }
-
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showNotification("Este navegador no soporta cámara.", "error");
+        setCamStatus("sin soporte");
         return;
       }
 
       try {
         cameraActive = true;
+        setCamStatus("iniciando…");
 
-        // Hints: priorizar 1D (barras)
+        // Hints: priorizar barras 1D (sin bloquear QR/otros)
         const hints = new Map();
         const formats = [
           ZXing.BarcodeFormat.EAN_13,
@@ -458,12 +534,16 @@
           ZXing.BarcodeFormat.UPC_E,
           ZXing.BarcodeFormat.CODE_128,
           ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.ITF
+          ZXing.BarcodeFormat.ITF,
+          ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.DATA_MATRIX,
+          ZXing.BarcodeFormat.PDF_417
         ];
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-        codeReader = new ZXing.BrowserMultiFormatReader(hints, 300);
+        // 250ms entre intentos suele ser mejor en teléfonos
+        codeReader = new ZXing.BrowserMultiFormatReader(hints, 250);
 
         const constraints = {
           audio: false,
@@ -484,25 +564,24 @@
               const text = String(result.getText ? result.getText() : result.text).trim();
               if (!text) return;
 
-              // beep
-              try {
-                if (beepSound) {
-                  beepSound.currentTime = 0;
-                  beepSound.play().catch(() => {});
-                }
-              } catch {}
+              playBeep();
+              if (optVibrate.checked && navigator.vibrate) navigator.vibrate(120);
 
-              // vibración
-              if (navigator.vibrate) navigator.vibrate(100);
-
-              // auto-agregar
+              // Colocar en input
               claveInput.value = text;
-              const ok = addItem({silent:true});
-              if (ok) showNotification(`Escaneado: ${text}`, "success");
-              else showNotification("No se pudo agregar (verifica caducidad/cantidad)", "error");
 
-              // modo 1 por 1: detener
-              stopCameraScan();
+              if (optAutoAdd.checked) {
+                const ok = addItem({ silent: true });
+                if (ok) showNotification(`Escaneado: ${text}`, "success");
+                else showNotification("No se pudo agregar (verifica caducidad/cantidad)", "error");
+
+                // Detener para evitar duplicados (puedes cambiar esto a continuo si quieres)
+                stopCameraScan();
+              } else {
+                showNotification(`Detectado: ${text}`, "success");
+                // Mantener cámara activa si NO auto-agrega
+              }
+
               return;
             }
 
@@ -513,12 +592,24 @@
           }
         );
 
-        setTimeout(() => tryApplyZoom(2.0), 800);
+        // Intentar forzar enfoque/zoom en el track ya abierto
+        setTimeout(async () => {
+          try {
+            const stream = cameraVideo.srcObject;
+            if (!stream) return;
+            const [track] = stream.getVideoTracks();
+            if (!track) return;
+            await applyAdvancedConstraints(track);
+          } catch {}
+        }, 800);
+
+        setCamStatus("escaneando…");
 
       } catch (e) {
         cameraActive = false;
         console.error(e);
-        showNotification("No se pudo abrir la cámara. Revisa permisos y HTTPS.", "error");
+        showNotification("No se pudo abrir la cámara. Revisa permisos y que sea HTTPS.", "error");
+        setCamStatus("error al iniciar");
       }
     }
 
@@ -535,9 +626,12 @@
       const stream = cameraVideo.srcObject;
       if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
       cameraVideo.srcObject = null;
+
+      setCamStatus("detenido");
     }
 
     // Eventos
+
     scanBtn.addEventListener("click", () => {
       const ok = addItem();
       if (ok) showNotification("Agregado", "success");
