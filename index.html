@@ -145,7 +145,7 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <div>
         <div class="t">Escáner de Artículos</div>
-        <div style="font-size:12px;opacity:.86;">Versión 3.5</div>
+        <div style="font-size:12px;opacity:.86;">Versión 3.6</div>
       </div>
     </div>
     <div class="h-right" style="display:flex;align-items:center;gap:10px;"><div style="opacity:.9;font-size:12px;">Caducidad + Clave + Cantidad</div><button id="btnMode" class="btn-primary" type="button" style="padding:10px 12px;border-radius:12px;font-size:12px;white-space:nowrap;"><i class="fa-solid fa-toggle-on"></i> Automático</button></div>
@@ -180,6 +180,16 @@
     <section class="card" id="cameraCard">
       <div class="card-h">
         <div class="ttl"><i class="fa-solid fa-camera"></i> Escaneo con Cámara</div>
+      </div>
+
+      <div class="filters" style="margin-bottom:10px;">
+        <div style="min-width:220px;flex:1;">
+          <label>Caducidad (Mes)</label>
+          <select id="caducidadAuto">
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+          </select>
+        </div>
       </div>
 
       <div class="cam-actions">
@@ -350,6 +360,7 @@
 
       // Para que no brinque: en modo auto, evitamos foco y teclado
       if (isAuto){
+        try{ syncCaducidadToAuto(); }catch(e){}
         try{ claveEl.blur(); }catch(e){}
       }else{
         stopCam();
@@ -369,6 +380,7 @@
 
 
     const caducidadEl = document.getElementById('caducidad');
+    const caducidadAutoEl = document.getElementById('caducidadAuto');
     const claveEl = document.getElementById('clave');
     const cantidadEl = document.getElementById('cantidad');
     const btnAgregar = document.getElementById('btnAgregar');
@@ -386,6 +398,21 @@
     let items = JSON.parse(localStorage.getItem('scannerData') || 'null') || [];
     let curFilterClave = '';
     let curFilterCad = '';
+
+    function syncCaducidadToAuto(){
+      if (!caducidadAutoEl || !caducidadEl) return;
+      caducidadAutoEl.value = caducidadEl.value;
+    }
+    function syncCaducidadToManual(){
+      if (!caducidadAutoEl || !caducidadEl) return;
+      caducidadEl.value = caducidadAutoEl.value;
+    }
+    if (caducidadEl) caducidadEl.addEventListener('change', syncCaducidadToAuto);
+    if (caducidadAutoEl) caducidadAutoEl.addEventListener('change', ()=>{
+      syncCaducidadToManual();
+      notify('Mes actualizado', 'ok');
+    });
+
 
     function saveData(){ localStorage.setItem('scannerData', JSON.stringify(items)); }
     function escapeHtml(s){
