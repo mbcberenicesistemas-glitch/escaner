@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Escáner de Artículos</title>
 
   <link rel="manifest" href="manifest.webmanifest" />
@@ -26,7 +26,7 @@
       --radius:12px;
     }
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    body{background:var(--bg);color:var(--text);max-width:1080px;margin:0 auto;padding:14px}
+    body{background:var(--bg);color:var(--text);max-width:1080px;margin:0 auto;padding:14px;scroll-padding-top:90px}
     header{
       background:linear-gradient(135deg,#243243 0%,#2f4257 100%);
       color:#fff;border-radius:14px;box-shadow:var(--shadow);
@@ -48,7 +48,7 @@
     label{display:block;font-weight:800;font-size:12px;color:var(--muted);margin-bottom:6px}
     input,select{
       width:100%;padding:12px 12px;border:1.8px solid #d4dde8;border-radius:10px;
-      font-size:15px;outline:none;background:#fff;transition:.15s
+      font-size:16px;outline:none;background:#fff;transition:.15s
     }
     input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(52,152,219,.18)}
     button{
@@ -160,7 +160,7 @@
         </div>
         <div>
           <label>Clave (Código)</label>
-          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" inputmode="numeric" />
+          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" / inputmode="none" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
         <div>
           <label>Cantidad</label>
@@ -426,6 +426,15 @@
 
     btnAgregar.addEventListener('click', ()=>{ unlockAudio(); addItemFromInputs(); });
     claveEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ unlockAudio(); addItemFromInputs(); } });
+    // Muchos lectores físicos envían ENTER al final. Si el foco está en Clave, agregamos.
+    document.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' && document.activeElement === claveEl){
+        e.preventDefault();
+        unlockAudio();
+        addItemFromInputs();
+      }
+    });
+
 
     btnFiltrar.addEventListener('click', ()=>{
       curFilterClave = (fClave.value||'').trim();
@@ -483,11 +492,49 @@
     const lastCode = document.getElementById('lastCode');
 
     let codeReader = null;
+    let lastScanTs = 0;
+    let lastScanText = '';
+    const SCAN_COOLDOWN_MS = 650; // evita doble lectura
+
     let controls = null;
     let cameraActive = false;
     let torchOn = false;
 
     function setStatus(s){ camStatus.textContent = s; }
+    function getRoiRect(){
+      const area = document.querySelector('.scan-area');
+      const r = area.getBoundingClientRect();
+      const vr = video.getBoundingClientRect();
+      const x = (r.left - vr.left) / vr.width;
+      const y = (r.top - vr.top) / vr.height;
+      const w = r.width / vr.width;
+      const h = r.height / vr.height;
+      return {x, y, w, h};
+    }
+    function inRoiFromResult(result){
+      const pts = result.resultPoints || (result.getResultPoints && result.getResultPoints()) || [];
+      if (!pts || !pts.length) return true;
+      const vw = video.videoWidth || 0;
+      const vh = video.videoHeight || 0;
+      if (!vw || !vh) return true;
+
+      let minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9;
+      for (const p of pts){
+        const x = (p && (p.x ?? (p.getX && p.getX()))) ?? 0;
+        const y = (p && (p.y ?? (p.getY && p.getY()))) ?? 0;
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      }
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const nx = cx / vw;
+      const ny = cy / vh;
+
+      const roi = getRoiRect();
+      const pad = 0.03;
+      return (nx >= roi.x - pad && nx <= roi.x + roi.w + pad && ny >= roi.y - pad && ny <= roi.y + roi.h + pad);
+    }
+
 
     async function applyTrackTweaks(track){
       try{
@@ -542,7 +589,7 @@
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-        codeReader = new ZXing.BrowserMultiFormatReader(hints, 200);
+        codeReader = new ZXing.BrowserMultiFormatReader(hints, 120);
 
         const constraints = {
           audio: false,
@@ -550,16 +597,37 @@
         };
 
         controls = await codeReader.decodeFromConstraints(constraints, video, (result, err)=>{
-          if (result){
-            const text = String(result.getText ? result.getText() : result.text).trim();
-            if (!text) return;
-            lastCode.textContent = text;
-            beep(); vibrate();
+          if (!result) return;
 
-            if (optAuto.checked){
-              claveEl.value = text;
-              const ok = addItemFromInputs({silent:true});
-              notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
+          const now = Date.now();
+          if (now - lastScanTs < SCAN_COOLDOWN_MS) return;
+
+          try{
+            if (!inRoiFromResult(result)) return;
+          }catch(e){}
+
+          const text = String(result.getText ? result.getText() : result.text).trim();
+          if (!text) return;
+
+          if (text === lastScanText && (now - lastScanTs) < 2500) return;
+
+          lastScanTs = now;
+          lastScanText = text;
+
+          lastCode.textContent = text;
+          beep(); vibrate();
+
+          if (optAuto.checked){
+            claveEl.value = text;
+            const ok = addItemFromInputs({silent:true});
+            notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
+          } else {
+            claveEl.value = text;
+            notify(`Detectado: ${text}`, 'ok');
+          }
+        });
+
+        notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
               stopCam();
             } else {
               claveEl.value = text;
