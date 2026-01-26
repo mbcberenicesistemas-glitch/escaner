@@ -134,6 +134,9 @@
 
     @media (max-width: 920px){ .row{grid-template-columns:1fr 1fr} }
     @media (max-width: 560px){ .row{grid-template-columns:1fr} .video-wrap{aspect-ratio:4/3} }
+    .hidden{display:none !important;}
+    .mode-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.10);font-weight:900;font-size:12px;}
+
   </style>
 </head>
 <body>
@@ -142,14 +145,14 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <div>
         <div class="t">Escáner de Artículos</div>
-        <div style="font-size:12px;opacity:.86;">Versión 3.2</div>
+        <div style="font-size:12px;opacity:.86;">Versión 3.5</div>
       </div>
     </div>
-    <div class="h-right">Caducidad + Clave + Cantidad</div>
+    <div class="h-right" style="display:flex;align-items:center;gap:10px;"><div style="opacity:.9;font-size:12px;">Caducidad + Clave + Cantidad</div><button id="btnMode" class="btn-primary" type="button" style="padding:10px 12px;border-radius:12px;font-size:12px;white-space:nowrap;"><i class="fa-solid fa-toggle-on"></i> Automático</button></div>
   </header>
 
   <div class="container">
-    <section class="card">
+    <section class="card" id="manualCard">
       <div class="row">
         <div>
           <label>Caducidad (Mes)</label>
@@ -174,7 +177,7 @@
       <canvas id="scanCanvas" style="display:none;"></canvas>
     </section>
 
-    <section class="card">
+    <section class="card" id="cameraCard">
       <div class="card-h">
         <div class="ttl"><i class="fa-solid fa-camera"></i> Escaneo con Cámara</div>
       </div>
@@ -326,6 +329,45 @@
     optVib.addEventListener('change', savePrefs);
     loadPrefs();
 
+    const manualCard = document.getElementById('manualCard');
+    const cameraCard = document.getElementById('cameraCard');
+    const btnMode = document.getElementById('btnMode');
+
+    // uiMode: 'manual' o 'auto'
+    let uiMode = localStorage.getItem('scannerUIMode') || 'manual';
+
+    function applyMode(){
+      const isAuto = (uiMode === 'auto');
+      if (manualCard) manualCard.classList.toggle('hidden', isAuto);
+      if (cameraCard) cameraCard.classList.toggle('hidden', !isAuto);
+
+      if (btnMode){
+        btnMode.innerHTML = isAuto
+          ? '<i class="fa-solid fa-keyboard"></i> Manual'
+          : '<i class="fa-solid fa-camera"></i> Automático';
+        btnMode.className = isAuto ? 'btn-muted' : 'btn-primary';
+      }
+
+      // Para que no brinque: en modo auto, evitamos foco y teclado
+      if (isAuto){
+        try{ claveEl.blur(); }catch(e){}
+      }else{
+        stopCam();
+        // en manual sí enfocamos
+        setTimeout(()=>{ try{ claveEl.focus(); }catch(e){} }, 120);
+      }
+      localStorage.setItem('scannerUIMode', uiMode);
+    }
+
+    if (btnMode){
+      btnMode.addEventListener('click', ()=>{
+        uiMode = (uiMode === 'manual') ? 'auto' : 'manual';
+        applyMode();
+      });
+    }
+
+
+
     const caducidadEl = document.getElementById('caducidad');
     const claveEl = document.getElementById('clave');
     const cantidadEl = document.getElementById('cantidad');
@@ -350,7 +392,27 @@
       return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
     }
 
-    function addItemFromInputs({silent=false} = {}){
+    
+    function addItemDirect(code, {silent=false} = {}){
+      const cad = caducidadEl.value;
+      const clave = String(code || '').trim();
+      const cant = parseInt((cantidadEl.value || '0'), 10);
+
+      if (!cad){ if(!silent) notify('Selecciona caducidad', 'bad'); return false; }
+      if (!clave){ if(!silent) notify('Código vacío', 'bad'); return false; }
+      if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
+
+      items.push({ caducidad: cad, clave, cantidad: cant });
+      saveData();
+      render();
+      beep(); vibrate();
+
+      // En modo cámara NO movemos foco ni limpiamos para evitar brincos
+      if(!silent) notify('Agregado', 'ok');
+      return true;
+    }
+
+function addItemFromInputs({silent=false} = {}){
       const cad = caducidadEl.value;
       const clave = (claveEl.value || '').trim();
       const cant = parseInt((cantidadEl.value || '0'), 10);
@@ -618,6 +680,11 @@
         let running = true;
         setStatus('escaneando');
 
+        // Evitar 'brinco' por ajustes del navegador al actualizar UI
+        let lockedScrollY = window.scrollY;
+        const lockScroll = ()=>{ if (uiMode === 'auto') window.scrollTo(0, lockedScrollY); };
+
+
         const loop = async ()=>{
           if (!cameraActive || !running) return;
 
@@ -679,12 +746,14 @@
               beep(); vibrate();
 
               if (optAuto.checked){
-                claveEl.value = codeText;
-                const ok = addItemFromInputs({silent:true});
+                const ok = addItemDirect(codeText, {silent:true});
                 notify(ok ? `Escaneado: ${codeText}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
+                lockScroll();
               } else {
-                claveEl.value = codeText;
+                // En modo automático no escribimos en el input para evitar movimiento/teclado
+                if (uiMode === 'manual') { claveEl.value = codeText; }
                 notify(`Detectado: ${codeText}`, 'ok');
+                lockScroll();
               }
             }
           }catch(e){
