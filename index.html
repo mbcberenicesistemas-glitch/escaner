@@ -1,677 +1,618 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escáner de Artículos - Caducidad, Clave, Cantidad</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escáner de Artículos</title>
 
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#2c3e50">
-
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2c3e50" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- ZXing (lector de códigos por cámara) -->
-  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background-color: #f0f2f5; color: #333; padding: 20px; max-width: 1200px; margin: 0 auto; }
-    header { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; padding: 25px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 25px; text-align: center; }
-    h1 { font-size: 2.2rem; margin-bottom: 10px; }
-    .subtitle { font-size: 1.1rem; opacity: 0.9; max-width: 700px; margin: 0 auto; }
-    .container { display: flex; flex-direction: column; gap: 25px; }
-    .scanner-section { background-color: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .scanner-header { display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eaeaea; }
-    .scanner-header i { font-size: 1.8rem; color: #3498db; margin-right: 15px; }
-    .scanner-header h2 { font-size: 1.5rem; color: #2c3e50; }
-    .input-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
-    .input-group { flex: 1; min-width: 200px; }
-    label { display: block; margin-bottom: 8px; font-weight: 600; color: #444; font-size: 0.95rem; }
-    input, select { width: 100%; padding: 12px 15px; border: 2px solid #ddd; border-radius: 6px; font-size: 1rem; transition: all 0.3s; }
-    input:focus, select:focus { border-color: #3498db; outline: none; box-shadow: 0 0 0 3px rgba(52,152,219,0.2); }
-    .buttons { display: flex; gap: 15px; margin-top: 25px; flex-wrap: wrap; }
-    button { padding: 12px 20px; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .scan-btn { background-color: #2ecc71; color: white; flex: 1; }
-    .scan-btn:hover { background-color: #27ae60; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(46,204,113,0.3); }
-    .filter-btn { background-color: #95a5a6; color: white; padding: 12px 20px; }
-    .filter-btn:hover { background-color: #7f8c8d; transform: translateY(-2px); }
-    .danger { background-color: #e74c3c; color: white; width: 100%; }
-    .danger:hover { background-color: #c0392b; transform: translateY(-2px); }
-    .results-section { background-color: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto; }
-    .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eaeaea; gap: 10px; flex-wrap: wrap; }
-    .results-header h2 { font-size: 1.5rem; color: #2c3e50; display: flex; align-items: center; gap: 10px; }
-    .export-btn { background-color: #3498db; color: white; padding: 10px 15px; font-size: 0.9rem; }
-    .export-btn:hover { background-color: #2980b9; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 600px; }
-    th { background-color: #f8f9fa; padding: 16px 12px; text-align: left; font-weight: 700; color: #2c3e50; border-bottom: 3px solid #eaeaea; position: sticky; top: 0; }
-    td { padding: 14px 12px; border-bottom: 1px solid #eaeaea; color: #555; }
-    tr:hover { background-color: #f9fafb; }
-    .caducidad-cell { font-weight: 600; color: #e74c3c; min-width: 120px; }
-    .clave-cell { font-weight: 700; color: #2c3e50; min-width: 150px; }
-    .cantidad-cell { text-align: center; font-weight: 700; color: #2ecc71; min-width: 100px; }
-    .summary { margin-top: 25px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-    .total-items { font-size: 1.1rem; font-weight: 600; color: #2c3e50; }
-    .total-items span { color: #3498db; font-size: 1.3rem; }
-    .empty-state { text-align: center; padding: 50px 20px; color: #888; }
-    .empty-state i { font-size: 3rem; margin-bottom: 15px; color: #ccc; }
-    .filter-section { background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
-    .filter-row { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-    .filter-group { display: flex; align-items: center; gap: 8px; }
-    .filter-label { font-weight: 600; color: #555; font-size: 0.9rem; }
-    .filter-input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 180px; }
-    .notification { position: fixed; top: 20px; right: 20px; background-color: #2ecc71; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; z-index: 1000; transform: translateX(150%); transition: transform 0.5s ease; }
-    .notification.show { transform: translateX(0); }
-    .notification.error { background-color: #e74c3c; }
-    .notification.warning { background-color: #f39c12; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; }
-    .modal-content { background-color: white; padding: 30px; border-radius: 10px; max-width: 520px; width: 92%; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    .modal-header { display: flex; align-items: center; margin-bottom: 20px; }
-    .modal-header i { font-size: 2rem; color: #e74c3c; margin-right: 15px; }
-    .modal-header h3 { font-size: 1.5rem; color: #2c3e50; }
-    .modal-body { margin-bottom: 25px; font-size: 1.1rem; line-height: 1.5; color: #555; }
-    .modal-buttons { display: flex; gap: 15px; justify-content: flex-end; flex-wrap: wrap; }
-    .modal-cancel-btn { background-color: #95a5a6; color: white; padding: 12px 20px; }
-    .modal-confirm-btn { background-color: #e74c3c; color: white; padding: 12px 20px; }
-    .camera-wrap { margin-top: 15px; position: relative; }
-
-    .scan-overlay{ position:absolute; inset:0; background: rgba(0,0,0,.22); border-radius:10px; pointer-events:none; }
-    .scan-frame{ position:absolute; left:50%; top:50%; width:min(86%, 520px); height:min(34%, 170px); transform:translate(-50%,-50%);
-      border:3px solid rgba(46,204,113,.95); border-radius:14px; box-shadow:0 0 0 9999px rgba(0,0,0,.28); pointer-events:none; }
-    .scan-line{ position:absolute; left:50%; top:50%; width:min(86%, 520px); height:2px; transform:translate(-50%,-50%);
-      background: rgba(46,204,113,.95); opacity:.85; pointer-events:none; }
-    video { width: 100%; border-radius: 10px; border: 2px solid #eaeaea; background: #000; }
-    .hint { margin-top: 10px; color: #666; font-size: 0.95rem; }
-    @media (max-width: 768px) {
-      .input-row { flex-direction: column; }
-      .buttons { flex-direction: column; }
-      h1 { font-size: 1.8rem; }
-      .results-header { flex-direction: column; align-items: flex-start; }
-      .filter-row { flex-direction: column; align-items: flex-start; }
+    :root{
+      --bg:#eef2f6;
+      --card:#fff;
+      --text:#253040;
+      --muted:#6b7785;
+      --primary:#2c3e50;
+      --accent:#3498db;
+      --ok:#2ecc71;
+      --warn:#f39c12;
+      --bad:#e74c3c;
+      --border:#e3e9f0;
+      --shadow:0 8px 22px rgba(18,38,63,.08);
+      --radius:12px;
     }
-  
-    .settings-row{
-      display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 10px;
-      background:#f8f9fa; border:1px solid #eaeaea; padding:10px 12px; border-radius:8px;
-      font-size:.95rem;
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    body{background:var(--bg);color:var(--text);max-width:1080px;margin:0 auto;padding:14px}
+    header{
+      background:linear-gradient(135deg,#243243 0%,#2f4257 100%);
+      color:#fff;border-radius:14px;box-shadow:var(--shadow);
+      padding:14px 16px;
+      display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
     }
-    .setting{ display:flex; align-items:center; gap:8px; user-select:none; }
-    .setting input{ width:auto; }
-    .camera-status{ margin:6px 0 0; font-size:.9rem; color:#2c3e50; opacity:.85; }
+    .h-left{display:flex;align-items:center;gap:12px}
+    .h-left i{font-size:22px;color:#dce8f7}
+    .h-left .t{font-size:20px;font-weight:900;letter-spacing:.2px}
+    .h-right{font-size:12px;opacity:.9}
+    .container{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px}
+    .card-h{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+      border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:12px;
+    }
+    .card-h .ttl{display:flex;align-items:center;gap:10px;color:var(--primary);font-weight:950}
+    .card-h .ttl i{color:var(--accent)}
+    label{display:block;font-weight:800;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,select{
+      width:100%;padding:12px 12px;border:1.8px solid #d4dde8;border-radius:10px;
+      font-size:15px;outline:none;background:#fff;transition:.15s
+    }
+    input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(52,152,219,.18)}
+    button{
+      border:none;border-radius:10px;padding:12px 14px;font-weight:950;cursor:pointer;
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.15s;user-select:none
+    }
+    .btn-ok{background:var(--ok);color:#fff}
+    .btn-ok:hover{filter:brightness(.96);transform:translateY(-1px)}
+    .btn-muted{background:#96a0a6;color:#fff}
+    .btn-muted:hover{filter:brightness(.95);transform:translateY(-1px)}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover{filter:brightness(.95);transform:translateY(-1px)}
+    .btn-bad{background:var(--bad);color:#fff}
+    .btn-bad:hover{filter:brightness(.95);transform:translateY(-1px)}
+    .row{display:grid;grid-template-columns:220px 1fr 140px 240px;gap:12px;align-items:end}
+    .row .btn-ok{width:100%}
 
+    /* cámara layout como tu imagen */
+    .cam-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
+    .cam-actions .start{flex:1;min-width:220px}
+    .cam-actions .stop{min-width:140px}
+    .toggles{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:10px}
+    .toggles label{display:flex;align-items:center;gap:8px;margin:0;font-weight:850;color:var(--muted)}
+    .toggles input{width:auto;transform:scale(1.05)}
+    .status{margin-top:10px;font-size:13px;color:var(--muted)}
+    .video-wrap{
+      width:100%;background:#000;border-radius:12px;border:1px solid var(--border);
+      overflow:hidden;position:relative;margin-top:10px;aspect-ratio: 16/7;min-height:160px;
+    }
+    video{width:100%;height:100%;object-fit:cover;display:block}
+    .scan-area{
+      position:absolute;left:50%;top:50%;
+      width:min(78%,520px);height:min(38%,180px);
+      transform:translate(-50%,-50%);
+      border:3px solid rgba(46,204,113,.95);
+      border-radius:14px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.25);
+      pointer-events:none;
+    }
+    .scan-line{
+      position:absolute;left:50%;top:50%;
+      width:min(78%,520px);height:2px;
+      transform:translate(-50%,-50%);
+      background:rgba(46,204,113,.95);
+      opacity:.85;pointer-events:none;
+    }
+
+    /* resultados */
+    .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+    .filters > div{min-width:220px}
+    .actions-right{display:flex;gap:10px;flex-wrap:wrap}
+    .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+    table{width:100%;border-collapse:collapse;min-width:560px}
+    th,td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left}
+    th{background:#f7f9fb;font-weight:950;color:#1f2a37}
+    .td-cad{font-weight:950;color:var(--bad)}
+    .td-clave{font-weight:950}
+    .td-cant{text-align:center;font-weight:950;color:var(--ok)}
+    .summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-weight:850}
+
+    .danger{
+      background:#fff7e6;border:1px solid rgba(243,156,18,.35);border-left:5px solid var(--warn);
+      padding:12px;border-radius:12px;color:#5a4a10
+    }
+
+    /* toast */
+    .toast{
+      position:fixed;top:16px;right:16px;z-index:3000;
+      background:var(--ok);color:#fff;padding:12px 14px;border-radius:12px;box-shadow:var(--shadow);
+      display:flex;gap:10px;align-items:center;transform:translateX(140%);transition:.25s;
+      max-width:min(92vw,520px)
+    }
+    .toast.show{transform:translateX(0)}
+    .toast.bad{background:var(--bad)}
+    .toast.warn{background:var(--warn)}
+
+    /* modal */
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:4000;align-items:center;justify-content:center}
+    .modal .box{background:#fff;width:min(520px,92vw);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+    .modal .box h3{display:flex;align-items:center;gap:10px;color:var(--primary);margin-bottom:10px}
+    .modal .box p{color:#4b5563;line-height:1.5;margin-bottom:14px}
+    .modal .actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+    @media (max-width: 920px){ .row{grid-template-columns:1fr 1fr} }
+    @media (max-width: 560px){ .row{grid-template-columns:1fr} .video-wrap{aspect-ratio:4/3} }
   </style>
 </head>
 <body>
   <header>
-    <h1><i class="fas fa-boxes"></i> Escáner de Artículos</h1>
-    <p class="subtitle">Registra artículos escaneados por Caducidad, Clave y Cantidad. Cámara: auto-agrega + sonido/vibración.</p>
+    <div class="h-left">
+      <i class="fa-solid fa-boxes-stacked"></i>
+      <div>
+        <div class="t">Escáner de Artículos</div>
+        <div style="font-size:12px;opacity:.86;">Versión 3.2</div>
+      </div>
+    </div>
+    <div class="h-right">Caducidad + Clave + Cantidad</div>
   </header>
 
   <div class="container">
-    <section class="scanner-section">
-      <div class="scanner-header">
-        <i class="fas fa-barcode"></i>
-        <h2>Nuevo Escaneo</h2>
-      </div>
-
-      <div class="input-row">
-        <div class="input-group">
-          <label for="caducidad-input"><i class="fas fa-calendar-day"></i> Caducidad (Mes)</label>
-          <select id="caducidad-input">
-            <option value="Enero">Enero</option><option value="Febrero">Febrero</option><option value="Marzo">Marzo</option>
-            <option value="Abril">Abril</option><option value="Mayo">Mayo</option><option value="Junio">Junio</option>
-            <option value="Julio" selected>Julio</option><option value="Agosto">Agosto</option><option value="Septiembre">Septiembre</option>
-            <option value="Octubre">Octubre</option><option value="Noviembre">Noviembre</option><option value="Diciembre">Diciembre</option>
+    <section class="card">
+      <div class="row">
+        <div>
+          <label>Caducidad (Mes)</label>
+          <select id="caducidad">
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option selected>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
           </select>
         </div>
-
-        <div class="input-group">
-          <label for="clave-input"><i class="fas fa-key"></i> Clave (Código)</label>
-          <input type="text" id="clave-input" placeholder="Ej: 750... / CODE128 / ITF" autofocus>
+        <div>
+          <label>Clave (Código)</label>
+          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" inputmode="numeric" />
         </div>
-
-        <div class="input-group">
-          <label for="cantidad-input"><i class="fas fa-hashtag"></i> Cantidad</label>
-          <input type="number" id="cantidad-input" value="1" min="1">
+        <div>
+          <label>Cantidad</label>
+          <input id="cantidad" type="number" value="1" min="1" />
         </div>
-      </div>
-
-      <div class="buttons">
-        <button id="scan-btn" class="scan-btn" type="button"><i class="fas fa-plus-circle"></i> Agregar Escaneo</button>
+        <div>
+          <label style="visibility:hidden">Acción</label>
+          <button class="btn-ok" id="btnAgregar" type="button"><i class="fa-solid fa-circle-plus"></i> Agregar Escaneo</button>
+        </div>
       </div>
     </section>
 
-    <section class="scanner-section">
-      <div class="scanner-header">
-        <i class="fas fa-camera"></i>
-        <h2>Escaneo con Cámara</h2>
+    <section class="card">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-camera"></i> Escaneo con Cámara</div>
       </div>
 
-      <div class="buttons">
-        <button id="camera-scan-btn" class="scan-btn" type="button"><i class="fas fa-qrcode"></i> Iniciar Escaneo</button>
-        <button id="camera-stop-btn" class="filter-btn" type="button"><i class="fas fa-stop"></i> Detener</button>
+      <div class="cam-actions">
+        <button class="btn-ok start" id="btnCamStart" type="button"><i class="fa-solid fa-qrcode"></i> Iniciar Escaneo</button>
+        <button class="btn-muted stop" id="btnCamStop" type="button"><i class="fa-solid fa-stop"></i> Detener</button>
+        <button class="btn-primary" id="btnTorch" type="button" style="display:none;"><i class="fa-solid fa-lightbulb"></i> Luz</button>
       </div>
 
-
-      <div class="settings-row">
-        <label class="setting"><input type="checkbox" id="opt-autoadd" checked> Auto-agregar al detectar</label>
-        <label class="setting"><input type="checkbox" id="opt-sound" checked> Sonido</label>
-        <label class="setting"><input type="checkbox" id="opt-vibrate" checked> Vibración</label>
+      <div class="toggles">
+        <label><input id="optAuto" type="checkbox" checked> Auto-agregar al detectar</label>
+        <label><input id="optSound" type="checkbox" checked> Sonido</label>
+        <label><input id="optVib" type="checkbox" checked> Vibración</label>
       </div>
-      <div class="camera-status" id="camera-status">Estado: detenido</div>
 
-      <div class="camera-wrap">
-        <video id="camera-video" playsinline muted></video>
-        <div class="scan-overlay"></div>
-        <div class="scan-frame"></div>
+      <div class="status">
+        Estado: <strong id="camStatus">detenido</strong> &nbsp;&nbsp;|&nbsp;&nbsp;
+        Último: <strong id="lastCode">—</strong>
+      </div>
+
+      <div class="video-wrap">
+        <video id="video" playsinline muted></video>
+        <div class="scan-area"></div>
         <div class="scan-line"></div>
       </div>
-
-      <p class="hint">
-        Consejos: buena luz, acerca el código, evita reflejos. En barras 1D (EAN/UPC/Code128) suele ayudar estar más cerca.
-      </p>
     </section>
 
-    <section class="scanner-section">
-      <div class="scanner-header">
-        <i class="fas fa-exclamation-triangle"></i>
-        <h2>Zona de Peligro</h2>
-      </div>
-      <p style="background:#fff9e6; padding:15px; border-radius:6px; border-left:4px solid #f1c40f;">
-        <i class="fas fa-exclamation-circle"></i> <strong>Advertencia:</strong> Esta acción elimina todos los datos guardados en el dispositivo.
-      </p>
-      <div class="buttons">
-        <button id="clear-all-btn" class="danger" type="button"><i class="fas fa-trash-alt"></i> Limpiar Todos los Datos</button>
-      </div>
-    </section>
-
-    <section class="results-section">
-      <div class="results-header">
-        <h2><i class="fas fa-list-alt"></i> Resultados de Escaneo</h2>
-        <div class="results-header-actions">
-          <button id="export-btn" class="export-btn" type="button"><i class="fas fa-download"></i> Exportar CSV</button>
+    <section class="card">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-list-check"></i> Resultados de Escaneo</div>
+        <div class="actions-right">
+          <button class="btn-primary" id="btnExport" type="button"><i class="fa-solid fa-file-arrow-down"></i> Exportar CSV</button>
         </div>
       </div>
 
-      <div class="filter-section">
-        <div class="filter-row">
-          <div class="filter-group">
-            <span class="filter-label">Filtrar por Clave:</span>
-            <input type="text" id="filter-clave" class="filter-input" placeholder="Ej: 750">
-          </div>
-          <div class="filter-group">
-            <span class="filter-label">Filtrar por Caducidad:</span>
-            <select id="filter-caducidad" class="filter-input">
-              <option value="">Todos</option>
-              <option value="Enero">Enero</option><option value="Febrero">Febrero</option><option value="Marzo">Marzo</option>
-              <option value="Abril">Abril</option><option value="Mayo">Mayo</option><option value="Junio">Junio</option>
-              <option value="Julio">Julio</option><option value="Agosto">Agosto</option><option value="Septiembre">Septiembre</option>
-              <option value="Octubre">Octubre</option><option value="Noviembre">Noviembre</option><option value="Diciembre">Diciembre</option>
-            </select>
-          </div>
-          <button id="filter-btn" class="filter-btn" type="button"><i class="fas fa-filter"></i> Filtrar</button>
-          <button id="clear-filter-btn" class="filter-btn" type="button"><i class="fas fa-times"></i> Limpiar Filtro</button>
+      <div class="filters">
+        <div>
+          <label>Filtrar por Clave</label>
+          <input id="fClave" placeholder="Ej: 750" />
+        </div>
+        <div>
+          <label>Filtrar por Caducidad</label>
+          <select id="fCad">
+            <option value="">Todos</option>
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+          </select>
+        </div>
+        <div style="min-width:auto;">
+          <label style="visibility:hidden">Acción</label>
+          <button class="btn-muted" id="btnFiltrar" type="button"><i class="fa-solid fa-filter"></i> Filtrar</button>
+        </div>
+        <div style="min-width:auto;">
+          <label style="visibility:hidden">Acción</label>
+          <button class="btn-muted" id="btnLimpiarFiltro" type="button"><i class="fa-solid fa-xmark"></i> Limpiar Filtro</button>
         </div>
       </div>
 
-      <div id="results-container">
-        <div class="empty-state">
-          <i class="fas fa-clipboard-list"></i>
-          <p>No hay artículos aún.</p>
-        </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <div id="tablaWrap" style="min-height:160px;"></div>
       </div>
 
       <div class="summary">
-        <div class="total-items">Total de escaneos: <span id="total-scans">0</span></div>
-        <div class="total-items">Claves diferentes: <span id="unique-items">0</span></div>
-        <div class="total-items">Total unidades: <span id="total-units">0</span></div>
+        <div>Total de escaneos: <strong id="sumScans">0</strong></div>
+        <div>Claves diferentes: <strong id="sumUnique">0</strong></div>
+        <div>Total unidades: <strong id="sumUnits">0</strong></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warn)"></i> Zona de Peligro</div>
+      </div>
+      <div class="danger">
+        <strong>Advertencia:</strong> Esta acción elimina todos los datos guardados en el dispositivo.
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn-bad" id="btnClearAll" type="button" style="width:100%;"><i class="fa-solid fa-trash"></i> Limpiar Todos los Datos</button>
       </div>
     </section>
   </div>
 
-  <!-- Modal confirmación -->
-  <div id="confirm-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <i class="fas fa-exclamation-triangle"></i>
-        <h3>Confirmar Eliminación</h3>
-      </div>
-      <div class="modal-body">
-        ¿Seguro que quieres borrar todos los datos? No se puede deshacer.
-      </div>
-      <div class="modal-buttons">
-        <button id="modal-cancel-btn" class="modal-cancel-btn" type="button"><i class="fas fa-times"></i> Cancelar</button>
-        <button id="modal-confirm-btn" class="modal-confirm-btn" type="button"><i class="fas fa-check"></i> Sí, borrar</button>
+  <div id="toast" class="toast"><i class="fa-solid fa-circle-check"></i><div id="toastMsg" style="font-weight:950;">OK</div></div>
+
+  <div id="modal" class="modal">
+    <div class="box">
+      <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--bad)"></i> Confirmar Eliminación</h3>
+      <p>¿Seguro que quieres borrar todos los datos? No se puede deshacer.</p>
+      <div class="actions">
+        <button class="btn-muted" id="btnCancel" type="button"><i class="fa-solid fa-xmark"></i> Cancelar</button>
+        <button class="btn-bad" id="btnConfirm" type="button"><i class="fa-solid fa-check"></i> Sí, Borrar</button>
       </div>
     </div>
   </div>
 
-  <div id="notification" class="notification">
-    <i class="fas fa-check-circle"></i>
-    <span id="notification-text">OK</span>
-  </div>
-
-  <!-- Beep -->
-  <audio id="beep-sound" preload="auto">
-    <source src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" type="audio/ogg">
-  </audio>
-
   <script>
-    // Datos iniciales (puedes borrar sampleData si no lo quieres)
-    const sampleData = [
-      { caducidad: "Julio", clave: "123", cantidad: 3 },
-      { caducidad: "Agosto", clave: "123", cantidad: 2 },
-      { caducidad: "Julio", clave: "456", cantidad: 1 }
-    ];
-
-    // DOM
-    const caducidadInput = document.getElementById('caducidad-input');
-    const claveInput = document.getElementById('clave-input');
-    const cantidadInput = document.getElementById('cantidad-input');
-    const scanBtn = document.getElementById('scan-btn');
-    const clearAllBtn = document.getElementById('clear-all-btn');
-    const exportBtn = document.getElementById('export-btn');
-    const filterClave = document.getElementById('filter-clave');
-    const filterCaducidad = document.getElementById('filter-caducidad');
-    const filterBtn = document.getElementById('filter-btn');
-    const clearFilterBtn = document.getElementById('clear-filter-btn');
-    const resultsContainer = document.getElementById('results-container');
-    const totalScansElement = document.getElementById('total-scans');
-    const uniqueItemsElement = document.getElementById('unique-items');
-    const totalUnitsElement = document.getElementById('total-units');
-    const notification = document.getElementById('notification');
-    const notificationText = document.getElementById('notification-text');
-    const confirmModal = document.getElementById('confirm-modal');
-    const modalCancelBtn = document.getElementById('modal-cancel-btn');
-    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
-    const beepSound = document.getElementById('beep-sound');
-
-    // Filtros
-    let currentFilterClave = "";
-    let currentFilterCaducidad = "";
-
-    // Persistencia
-    let items = JSON.parse(localStorage.getItem('scannerData')) || sampleData;
-
-    function saveData() { localStorage.setItem('scannerData', JSON.stringify(items)); }
-
-    function showNotification(message, type = "success") {
-      notificationText.textContent = message;
-      notification.className = "notification";
-      notification.classList.add("show");
-      if (type === "error") notification.classList.add("error");
-      else if (type === "warning") notification.classList.add("warning");
-      setTimeout(() => notification.classList.remove("show"), 1800);
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    let toastT = null;
+    function notify(msg, type='ok'){
+      toastMsg.textContent = msg;
+      toast.className = 'toast show' + (type==='bad' ? ' bad' : type==='warn' ? ' warn' : '');
+      clearTimeout(toastT);
+      toastT = setTimeout(()=>toast.classList.remove('show'), 1600);
     }
 
-    function addItem({silent=false} = {}) {
-      const caducidad = caducidadInput.value;
-      const clave = claveInput.value.trim();
-      const cantidad = parseInt(String(cantidadInput.value).trim(), 10);
+    const optSound = document.getElementById('optSound');
+    const optVib = document.getElementById('optVib');
+    const optAuto = document.getElementById('optAuto');
 
-      if (!caducidad) { if(!silent) showNotification("Selecciona caducidad", "error"); return false; }
-      if (!clave) { if(!silent) showNotification("Introduce clave", "error"); return false; }
-      if (!cantidad || isNaN(cantidad) || cantidad <= 0) { if(!silent) showNotification("Cantidad inválida", "error"); return false; }
-
-      items.push({ caducidad, clave, cantidad });
-      saveData();
-      updateResults();
-
-      // Sonido/vibración también en escaneo normal
-      if (!silent) {
-        playBeep();
-        if (optVibrate.checked && navigator.vibrate) navigator.vibrate(100);
-      }
-
-      // limpiar
-      claveInput.value = "";
-      cantidadInput.value = "1";
-      claveInput.focus();
-      return true;
-    }
-
-    function showConfirmModal() {
-      if (items.length === 0) { showNotification("No hay datos para limpiar", "warning"); return; }
-      confirmModal.style.display = "flex";
-    }
-    function closeConfirmModal() { confirmModal.style.display = "none"; }
-    function clearAllData() {
-      items = [];
-      saveData();
-      updateResults();
-      showNotification("Datos eliminados", "warning");
-      closeConfirmModal();
-    }
-
-    function processResults() {
-      const groupedData = {};
-      let totalUnits = 0;
-      let unique = new Set();
-
-      let filtered = items;
-      if (currentFilterClave) filtered = filtered.filter(i => i.clave.toLowerCase().includes(currentFilterClave.toLowerCase()));
-      if (currentFilterCaducidad) filtered = filtered.filter(i => i.caducidad.toLowerCase() === currentFilterCaducidad.toLowerCase());
-
-      for (const item of filtered) {
-        const k = `${item.clave}|${item.caducidad}`;
-        if (!groupedData[k]) groupedData[k] = { caducidad: item.caducidad, clave: item.clave, cantidad: 0 };
-        groupedData[k].cantidad += item.cantidad;
-        totalUnits += item.cantidad;
-        unique.add(item.clave);
-      }
-
-      const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-      const results = Object.values(groupedData).sort((a,b) => {
-        if (a.caducidad === b.caducidad) return a.clave.localeCompare(b.clave);
-        return months.indexOf(a.caducidad) - months.indexOf(b.caducidad);
-      });
-
-      return { results, totalScans: filtered.length, totalUnits, uniqueItems: unique.size };
-    }
-
-    function updateResults() {
-      const { results, totalScans, totalUnits, uniqueItems } = processResults();
-
-      totalScansElement.textContent = totalScans;
-      totalUnitsElement.textContent = totalUnits;
-      uniqueItemsElement.textContent = uniqueItems;
-
-      if (results.length === 0) {
-        resultsContainer.innerHTML = `
-          <div class="empty-state">
-            <i class="fas fa-clipboard-list"></i>
-            <p>${items.length === 0 ? "No hay artículos aún." : "No hay resultados con esos filtros."}</p>
-          </div>`;
-        return;
-      }
-
-      let html = `
-        <table>
-          <thead><tr><th>Caducidad (Mes)</th><th>Clave (Código)</th><th>Cantidad</th></tr></thead>
-          <tbody>`;
-      for (const item of results) {
-        html += `
-          <tr>
-            <td class="caducidad-cell">${item.caducidad}</td>
-            <td class="clave-cell">${item.clave}</td>
-            <td class="cantidad-cell">${item.cantidad}</td>
-          </tr>`;
-      }
-      html += `</tbody></table>`;
-      resultsContainer.innerHTML = html;
-    }
-
-    function applyFilters() {
-      currentFilterClave = filterClave.value.trim();
-      currentFilterCaducidad = filterCaducidad.value;
-      updateResults();
-      showNotification("Filtro aplicado", "success");
-    }
-
-    function clearFilters() {
-      filterClave.value = "";
-      filterCaducidad.value = "";
-      currentFilterClave = "";
-      currentFilterCaducidad = "";
-      updateResults();
-      showNotification("Filtro limpiado", "success");
-    }
-
-    function exportResults() {
-      const { results } = processResults();
-      if (results.length === 0) { showNotification("No hay datos para exportar", "error"); return; }
-
-      let csv = "Caducidad,Clave,Cantidad\n";
-      for (const item of results) csv += `"${item.caducidad}","${item.clave}",${item.cantidad}\n`;
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `escaneos_${new Date().toISOString().split("T")[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showNotification("CSV descargado", "success");
-    }
-
-    
-    // --- Cámara: lector de códigos de barras (1D/2D) + auto-agregar + beep + vibración ---
-    const cameraScanBtn = document.getElementById('camera-scan-btn');
-    const cameraStopBtn = document.getElementById('camera-stop-btn');
-    const cameraVideo = document.getElementById('camera-video');
-    const cameraStatus = document.getElementById('camera-status');
-
-    const optAutoAdd = document.getElementById('opt-autoadd');
-    const optSound = document.getElementById('opt-sound');
-    const optVibrate = document.getElementById('opt-vibrate');
-
-    function loadOptions() {
-      try {
-        const raw = JSON.parse(localStorage.getItem('scannerOptions') || '{}');
-        if (typeof raw.autoAdd === 'boolean') optAutoAdd.checked = raw.autoAdd;
-        if (typeof raw.sound === 'boolean') optSound.checked = raw.sound;
-        if (typeof raw.vibrate === 'boolean') optVibrate.checked = raw.vibrate;
-      } catch {}
-    }
-    function saveOptions() {
-      const raw = { autoAdd: optAutoAdd.checked, sound: optSound.checked, vibrate: optVibrate.checked };
-      localStorage.setItem('scannerOptions', JSON.stringify(raw));
-    }
-    [optAutoAdd, optSound, optVibrate].forEach(el => el.addEventListener('change', saveOptions));
-    loadOptions();
-
-    function setCamStatus(text) {
-      if (cameraStatus) cameraStatus.textContent = `Estado: ${text}`;
-    }
-
-    // Beep por WebAudio (más confiable en Android que <audio> en callbacks async)
     let audioCtx = null;
-    function ensureAudio() {
-      try {
+    function unlockAudio(){
+      try{
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-      } catch {}
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }catch(e){}
     }
-    function playBeep() {
+    function beep(){
       if (!optSound.checked) return;
-      try {
-        ensureAudio();
+      try{
+        unlockAudio();
         if (!audioCtx) return;
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         o.type = 'sine';
         o.frequency.value = 880;
-        g.gain.value = 0.12;
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
         o.connect(g); g.connect(audioCtx.destination);
         o.start();
-        setTimeout(() => { try { o.stop(); } catch {} }, 110);
-      } catch {}
+        o.stop(audioCtx.currentTime + 0.13);
+      }catch(e){}
     }
+    function vibrate(){ if (optVib.checked && navigator.vibrate) navigator.vibrate(100); }
+
+    function loadPrefs(){
+      const p = JSON.parse(localStorage.getItem('scannerPrefs') || '{}');
+      optAuto.checked = p.auto !== false;
+      optSound.checked = p.sound !== false;
+      optVib.checked = p.vib !== false;
+    }
+    function savePrefs(){
+      localStorage.setItem('scannerPrefs', JSON.stringify({ auto: optAuto.checked, sound: optSound.checked, vib: optVib.checked }));
+    }
+    optAuto.addEventListener('change', savePrefs);
+    optSound.addEventListener('change', savePrefs);
+    optVib.addEventListener('change', savePrefs);
+    loadPrefs();
+
+    const caducidadEl = document.getElementById('caducidad');
+    const claveEl = document.getElementById('clave');
+    const cantidadEl = document.getElementById('cantidad');
+    const btnAgregar = document.getElementById('btnAgregar');
+
+    const fClave = document.getElementById('fClave');
+    const fCad = document.getElementById('fCad');
+    const btnFiltrar = document.getElementById('btnFiltrar');
+    const btnLimpiarFiltro = document.getElementById('btnLimpiarFiltro');
+    const tablaWrap = document.getElementById('tablaWrap');
+
+    const sumScans = document.getElementById('sumScans');
+    const sumUnique = document.getElementById('sumUnique');
+    const sumUnits = document.getElementById('sumUnits');
+
+    let items = JSON.parse(localStorage.getItem('scannerData') || 'null') || [];
+    let curFilterClave = '';
+    let curFilterCad = '';
+
+    function saveData(){ localStorage.setItem('scannerData', JSON.stringify(items)); }
+    function escapeHtml(s){
+      return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+
+    function addItemFromInputs({silent=false} = {}){
+      const cad = caducidadEl.value;
+      const clave = (claveEl.value || '').trim();
+      const cant = parseInt((cantidadEl.value || '0'), 10);
+
+      if (!cad){ if(!silent) notify('Selecciona caducidad', 'bad'); return false; }
+      if (!clave){ if(!silent) notify('Introduce clave', 'bad'); return false; }
+      if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
+
+      items.push({ caducidad: cad, clave, cantidad: cant });
+      saveData();
+      render();
+      beep(); vibrate();
+
+      claveEl.value = '';
+      cantidadEl.value = '1';
+      claveEl.focus();
+
+      if(!silent) notify('Agregado', 'ok');
+      return true;
+    }
+
+    function process(){
+      let filtered = items.slice();
+      if (curFilterClave) filtered = filtered.filter(i => i.clave.toLowerCase().includes(curFilterClave.toLowerCase()));
+      if (curFilterCad) filtered = filtered.filter(i => i.caducidad.toLowerCase() === curFilterCad.toLowerCase());
+
+      const grouped = {};
+      let units = 0;
+      const uniq = new Set();
+
+      for (const it of filtered){
+        const k = it.clave + '|' + it.caducidad;
+        if (!grouped[k]) grouped[k] = { caducidad: it.caducidad, clave: it.clave, cantidad: 0 };
+        grouped[k].cantidad += it.cantidad;
+        units += it.cantidad;
+        uniq.add(it.clave);
+      }
+
+      const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+      const results = Object.values(grouped).sort((a,b) => {
+        if (a.caducidad === b.caducidad) return a.clave.localeCompare(b.clave);
+        return months.indexOf(a.caducidad) - months.indexOf(b.caducidad);
+      });
+
+      return { results, scans: filtered.length, uniq: uniq.size, units };
+    }
+
+    function render(){
+      const { results, scans, uniq, units } = process();
+      sumScans.textContent = scans;
+      sumUnique.textContent = uniq;
+      sumUnits.textContent = units;
+
+      if (!results.length){
+        tablaWrap.innerHTML = `
+          <div style="padding:26px; text-align:center; color:var(--muted);">
+            <i class="fa-regular fa-clipboard" style="font-size:34px; opacity:.5;"></i>
+            <div style="margin-top:10px; font-weight:950;">${items.length ? 'No hay resultados con filtros.' : 'No hay artículos aún.'}</div>
+          </div>`;
+        return;
+      }
+
+      let html = `<table><thead><tr><th>Caducidad</th><th>Clave</th><th style="text-align:center;">Cantidad</th></tr></thead><tbody>`;
+      for (const r of results){
+        html += `<tr>
+          <td class="td-cad">${r.caducidad}</td>
+          <td class="td-clave">${escapeHtml(r.clave)}</td>
+          <td class="td-cant">${r.cantidad}</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
+      tablaWrap.innerHTML = html;
+    }
+
+    btnAgregar.addEventListener('click', ()=>{ unlockAudio(); addItemFromInputs(); });
+    claveEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ unlockAudio(); addItemFromInputs(); } });
+
+    btnFiltrar.addEventListener('click', ()=>{
+      curFilterClave = (fClave.value||'').trim();
+      curFilterCad = fCad.value || '';
+      render();
+      notify('Filtro aplicado', 'ok');
+    });
+    btnLimpiarFiltro.addEventListener('click', ()=>{
+      fClave.value=''; fCad.value='';
+      curFilterClave=''; curFilterCad='';
+      render();
+      notify('Filtro limpiado', 'ok');
+    });
+
+    document.getElementById('btnExport').addEventListener('click', ()=>{
+      const { results } = process();
+      if (!results.length){ notify('No hay datos para exportar', 'bad'); return; }
+      let csv = "Caducidad,Clave,Cantidad\n";
+      for (const r of results){
+        csv += `"${r.caducidad}","${String(r.clave).replaceAll('"','""')}",${r.cantidad}\n`;
+      }
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `escaneos_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      notify('CSV descargado', 'ok');
+    });
+
+    const modal = document.getElementById('modal');
+    document.getElementById('btnClearAll').addEventListener('click', ()=>{
+      if (!items.length){ notify('No hay datos', 'warn'); return; }
+      modal.style.display='flex';
+    });
+    document.getElementById('btnCancel').addEventListener('click', ()=> modal.style.display='none');
+    document.getElementById('btnConfirm').addEventListener('click', ()=>{
+      items = [];
+      saveData();
+      render();
+      modal.style.display='none';
+      notify('Datos eliminados', 'warn');
+    });
+    modal.addEventListener('click', (e)=>{ if(e.target === modal) modal.style.display='none'; });
+
+    // Cámara
+    const btnCamStart = document.getElementById('btnCamStart');
+    const btnCamStop = document.getElementById('btnCamStop');
+    const btnTorch = document.getElementById('btnTorch');
+    const video = document.getElementById('video');
+    const camStatus = document.getElementById('camStatus');
+    const lastCode = document.getElementById('lastCode');
 
     let codeReader = null;
-    let cameraActive = false;
     let controls = null;
+    let cameraActive = false;
+    let torchOn = false;
 
-    async function applyAdvancedConstraints(track) {
-      try {
-        const caps = track.getCapabilities ? track.getCapabilities() : {};
+    function setStatus(s){ camStatus.textContent = s; }
+
+    async function applyTrackTweaks(track){
+      try{
+        const caps = track.getCapabilities ? track.getCapabilities() : null;
+        if (!caps) return;
+        if (caps.torch) btnTorch.style.display = 'inline-flex';
+
         const adv = [];
-
-        // En algunos Android mejora mucho el enfoque continuo
-        if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
-          adv.push({ focusMode: 'continuous' });
+        if (caps.focusMode && caps.focusMode.includes('continuous')) adv.push({ focusMode: 'continuous' });
+        if (caps.exposureMode && caps.exposureMode.includes('continuous')) adv.push({ exposureMode: 'continuous' });
+        if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) adv.push({ whiteBalanceMode: 'continuous' });
+        if (caps.zoom){
+          const z = Math.min(caps.zoom.max ?? 2, 2);
+          const z2 = Math.max(caps.zoom.min ?? 1, z);
+          adv.push({ zoom: z2 });
         }
-        if (caps.exposureMode && Array.isArray(caps.exposureMode) && caps.exposureMode.includes('continuous')) {
-          adv.push({ exposureMode: 'continuous' });
-        }
-        if (caps.whiteBalanceMode && Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('continuous')) {
-          adv.push({ whiteBalanceMode: 'continuous' });
-        }
-
-        // Zoom moderado si existe
-        if (caps.zoom) {
-          const z = Math.max(caps.zoom.min ?? 1.0, Math.min(caps.zoom.max ?? 2.0, 2.0));
-          adv.push({ zoom: z });
-        }
-
         if (adv.length) await track.applyConstraints({ advanced: adv });
-      } catch {}
+      }catch(e){}
     }
 
-    async function startCameraScan() {
+    async function toggleTorch(){
+      try{
+        const stream = video.srcObject;
+        if (!stream) return;
+        const track = stream.getVideoTracks()[0];
+        const caps = track.getCapabilities ? track.getCapabilities() : null;
+        if (!caps || !caps.torch) return;
+        torchOn = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+        notify(torchOn ? 'Luz encendida' : 'Luz apagada', 'ok');
+      }catch(e){
+        notify('Tu cámara no permite luz', 'warn');
+      }
+    }
+
+    async function startCam(){
       if (cameraActive) return;
+      unlockAudio();
+      if (!window.ZXing){ notify('No cargó ZXing (HTTPS)', 'bad'); return; }
 
-      // Desbloquea audio por gesto del usuario
-      ensureAudio();
+      cameraActive = true;
+      setStatus('iniciando...');
 
-      if (!window.ZXing) {
-        showNotification("No cargó el lector (ZXing). Revisa tu conexión o recarga la página.", "error");
-        setCamStatus("ZXing no cargó");
-        return;
-      }
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showNotification("Este navegador no soporta cámara.", "error");
-        setCamStatus("sin soporte");
-        return;
-      }
-
-      try {
-        cameraActive = true;
-        setCamStatus("iniciando…");
-
-        // Hints: priorizar barras 1D (sin bloquear QR/otros)
+      try{
         const hints = new Map();
         const formats = [
-          ZXing.BarcodeFormat.EAN_13,
-          ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.UPC_A,
-          ZXing.BarcodeFormat.UPC_E,
-          ZXing.BarcodeFormat.CODE_128,
-          ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.ITF,
-          ZXing.BarcodeFormat.QR_CODE,
-          ZXing.BarcodeFormat.DATA_MATRIX,
-          ZXing.BarcodeFormat.PDF_417
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE
         ];
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-        // 250ms entre intentos suele ser mejor en teléfonos
-        codeReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+        codeReader = new ZXing.BrowserMultiFormatReader(hints, 200);
 
         const constraints = {
           audio: false,
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
         };
 
-        showNotification("Cámara activa. Acerca el código y mantén firme.", "success");
+        controls = await codeReader.decodeFromConstraints(constraints, video, (result, err)=>{
+          if (result){
+            const text = String(result.getText ? result.getText() : result.text).trim();
+            if (!text) return;
+            lastCode.textContent = text;
+            beep(); vibrate();
 
-        controls = await codeReader.decodeFromConstraints(
-          constraints,
-          cameraVideo,
-          (result, err) => {
-            if (result) {
-              const text = String(result.getText ? result.getText() : result.text).trim();
-              if (!text) return;
-
-              playBeep();
-              if (optVibrate.checked && navigator.vibrate) navigator.vibrate(120);
-
-              // Colocar en input
-              claveInput.value = text;
-
-              if (optAutoAdd.checked) {
-                const ok = addItem({ silent: true });
-                if (ok) showNotification(`Escaneado: ${text}`, "success");
-                else showNotification("No se pudo agregar (verifica caducidad/cantidad)", "error");
-
-                // Detener para evitar duplicados (puedes cambiar esto a continuo si quieres)
-                stopCameraScan();
-              } else {
-                showNotification(`Detectado: ${text}`, "success");
-                // Mantener cámara activa si NO auto-agrega
-              }
-
-              return;
-            }
-
-            // NotFoundException es normal cuando no hay código en el frame
-            if (err && err.name && err.name !== "NotFoundException") {
-              console.log("ZXing error:", err);
+            if (optAuto.checked){
+              claveEl.value = text;
+              const ok = addItemFromInputs({silent:true});
+              notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
+              stopCam();
+            } else {
+              claveEl.value = text;
+              notify(`Detectado: ${text}`, 'ok');
             }
           }
-        );
+        });
 
-        // Intentar forzar enfoque/zoom en el track ya abierto
-        setTimeout(async () => {
-          try {
-            const stream = cameraVideo.srcObject;
-            if (!stream) return;
-            const [track] = stream.getVideoTracks();
-            if (!track) return;
-            await applyAdvancedConstraints(track);
-          } catch {}
-        }, 800);
+        setStatus('escaneando');
 
-        setCamStatus("escaneando…");
+        setTimeout(async ()=>{
+          const stream = video.srcObject;
+          if (!stream) return;
+          const track = stream.getVideoTracks()[0];
+          if (track) await applyTrackTweaks(track);
+        }, 500);
 
-      } catch (e) {
+      }catch(e){
         cameraActive = false;
-        console.error(e);
-        showNotification("No se pudo abrir la cámara. Revisa permisos y que sea HTTPS.", "error");
-        setCamStatus("error al iniciar");
+        setStatus('error');
+        notify('No se pudo abrir cámara', 'bad');
       }
     }
 
-    function stopCameraScan() {
+    function stopCam(){
       if (!cameraActive) return;
       cameraActive = false;
 
-      try { if (controls) controls.stop(); } catch {}
+      try{ if (controls) controls.stop(); }catch(e){}
       controls = null;
 
-      try { if (codeReader) codeReader.reset(); } catch {}
+      try{ if (codeReader) codeReader.reset(); }catch(e){}
       codeReader = null;
 
-      const stream = cameraVideo.srcObject;
-      if (stream && stream.getTracks) stream.getTracks().forEach(t => t.stop());
-      cameraVideo.srcObject = null;
+      try{
+        const stream = video.srcObject;
+        if (stream && stream.getTracks) stream.getTracks().forEach(t=>t.stop());
+      }catch(e){}
+      video.srcObject = null;
 
-      setCamStatus("detenido");
+      torchOn = false;
+      setStatus('detenido');
     }
 
-    // Eventos
+    btnCamStart.addEventListener('click', startCam);
+    btnCamStop.addEventListener('click', stopCam);
+    btnTorch.addEventListener('click', toggleTorch);
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopCam(); });
 
-    scanBtn.addEventListener("click", () => {
-      const ok = addItem();
-      if (ok) showNotification("Agregado", "success");
-    });
-    clearAllBtn.addEventListener("click", showConfirmModal);
-    exportBtn.addEventListener("click", exportResults);
-    filterBtn.addEventListener("click", applyFilters);
-    clearFilterBtn.addEventListener("click", clearFilters);
-    modalCancelBtn.addEventListener("click", closeConfirmModal);
-    modalConfirmBtn.addEventListener("click", clearAllData);
-    cameraScanBtn.addEventListener("click", startCameraScan);
-    cameraStopBtn.addEventListener("click", stopCameraScan);
+    render();
 
-    claveInput.addEventListener("keypress", (e) => { if (e.key === "Enter") { const ok = addItem(); if(ok) showNotification("Agregado", "success"); }});
-    cantidadInput.addEventListener("keypress", (e) => { if (e.key === "Enter") { const ok = addItem(); if(ok) showNotification("Agregado", "success"); }});
-
-    window.addEventListener("click", (e) => { if (e.target === confirmModal) closeConfirmModal(); });
-    document.addEventListener("visibilitychange", () => { if (document.hidden) stopCameraScan(); });
-
-    // Inicial
-    updateResults();
-
-    // Service Worker
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    if ('serviceWorker' in navigator){
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
     }
   </script>
 </body>
