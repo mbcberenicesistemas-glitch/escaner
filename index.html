@@ -73,6 +73,12 @@
     .modal-cancel-btn { background-color: #95a5a6; color: white; padding: 12px 20px; }
     .modal-confirm-btn { background-color: #e74c3c; color: white; padding: 12px 20px; }
     .camera-wrap { margin-top: 15px; position: relative; }
+
+    .scan-overlay{ position:absolute; inset:0; background: rgba(0,0,0,.22); border-radius:10px; pointer-events:none; }
+    .scan-frame{ position:absolute; left:50%; top:50%; width:min(86%, 520px); height:min(34%, 170px); transform:translate(-50%,-50%);
+      border:3px solid rgba(46,204,113,.95); border-radius:14px; box-shadow:0 0 0 9999px rgba(0,0,0,.28); pointer-events:none; }
+    .scan-line{ position:absolute; left:50%; top:50%; width:min(86%, 520px); height:2px; transform:translate(-50%,-50%);
+      background: rgba(46,204,113,.95); opacity:.85; pointer-events:none; }
     video { width: 100%; border-radius: 10px; border: 2px solid #eaeaea; background: #000; }
     .hint { margin-top: 10px; color: #666; font-size: 0.95rem; }
     @media (max-width: 768px) {
@@ -155,6 +161,9 @@
 
       <div class="camera-wrap">
         <video id="camera-video" playsinline muted></video>
+        <div class="scan-overlay"></div>
+        <div class="scan-frame"></div>
+        <div class="scan-line"></div>
       </div>
 
       <p class="hint">
@@ -306,6 +315,12 @@
       items.push({ caducidad, clave, cantidad });
       saveData();
       updateResults();
+
+      // Sonido/vibración también en escaneo normal
+      if (!silent) {
+        playBeep();
+        if (optVibrate.checked && navigator.vibrate) navigator.vibrate(100);
+      }
 
       // limpiar
       claveInput.value = "";
