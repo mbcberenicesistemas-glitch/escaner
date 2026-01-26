@@ -154,6 +154,13 @@
     #cameraCard .toggles{display:grid !important;grid-template-columns:1fr 1fr !important;gap:10px 14px !important;margin-top:10px !important;}
     #cameraCard .toggles .ck{margin:0 !important;}
     #cameraCard .video-wrap{margin-top:6px !important;}
+/* v38 mobile fixes */
+    #cameraCard .cam-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;}
+    #cameraCard .cam-actions .btn{min-width:0 !important;}
+    @media (max-width: 420px){
+      #cameraCard .cam-actions{grid-template-columns:1fr !important;}
+      #cameraCard .cam-actions .btn{width:100% !important;}
+    }
 </style>
 </head>
 <body>
@@ -162,7 +169,7 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <div>
         <div class="t">Escáner de Artículos</div>
-        <div style="font-size:12px;opacity:.86;">Versión 3.7</div>
+        <div style="font-size:12px;opacity:.86;">Versión 3.8</div>
       </div>
     </div>
     <div class="h-right" style="display:flex;align-items:center;gap:10px;"><div style="opacity:.9;font-size:12px;">Caducidad + Clave + Cantidad</div><button id="btnMode" class="btn-primary" type="button" style="padding:10px 12px;border-radius:12px;font-size:12px;white-space:nowrap;"><i class="fa-solid fa-toggle-on"></i> Automático</button></div>
@@ -218,7 +225,17 @@
       <div class="video-wrap">
         <video id="video" playsinline muted></video>
         <div class="scan-area"></div>
-        <div class="scan-line"></div>
+        
+        <div class="filters auto-month">
+          <div style="min-width:220px;flex:1;">
+            <label>Caducidad (Mes)</label>
+            <select id="caducidadAuto">
+              <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+              <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+            </select>
+          </div>
+        </div>
+<div class="scan-line"></div>
       </div>
     </section>
 
