@@ -160,7 +160,7 @@
         </div>
         <div>
           <label>Clave (Código)</label>
-          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" / inputmode="none" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" / enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
         <div>
           <label>Cantidad</label>
@@ -171,6 +171,7 @@
           <button class="btn-ok" id="btnAgregar" type="button"><i class="fa-solid fa-circle-plus"></i> Agregar Escaneo</button>
         </div>
       </div>
+      <canvas id="scanCanvas" style="display:none;"></canvas>
     </section>
 
     <section class="card">
@@ -573,82 +574,135 @@
     async function startCam(){
       if (cameraActive) return;
       unlockAudio();
-      if (!window.ZXing){ notify('No cargó ZXing (HTTPS)', 'bad'); return; }
 
+      // Requiere HTTPS (GitHub Pages OK). En HTTP la cámara no funciona.
       cameraActive = true;
       setStatus('iniciando...');
 
       try{
-        const hints = new Map();
-        const formats = [
-          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE
-        ];
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-        codeReader = new ZXing.BrowserMultiFormatReader(hints, 120);
-
         const constraints = {
           audio: false,
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
         };
 
-        controls = await codeReader.decodeFromConstraints(constraints, video, (result, err)=>{
-          if (!result) return;
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        await video.play();
 
-          const now = Date.now();
-          if (now - lastScanTs < SCAN_COOLDOWN_MS) return;
-
+        // Ajustes de enfoque/zoom/torch si están disponibles
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          await applyTrackTweaks(track);
           try{
-            if (!inRoiFromResult(result)) return;
+            const caps = track.getCapabilities ? track.getCapabilities() : null;
+            if (caps && caps.torch) btnTorch.style.display = 'inline-flex';
           }catch(e){}
+        }
 
-          const text = String(result.getText ? result.getText() : result.text).trim();
-          if (!text) return;
-
-          if (text === lastScanText && (now - lastScanTs) < 2500) return;
-
-          lastScanTs = now;
-          lastScanText = text;
-
-          lastCode.textContent = text;
-          beep(); vibrate();
-
-          if (optAuto.checked){
-            claveEl.value = text;
-            const ok = addItemFromInputs({silent:true});
-            notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
-          } else {
-            claveEl.value = text;
-            notify(`Detectado: ${text}`, 'ok');
+        // BarcodeDetector nativo (rápido). Fallback a ZXing si no existe.
+        const supportsNative = ('BarcodeDetector' in window);
+        let detector = null;
+        if (supportsNative){
+          try{
+            detector = new BarcodeDetector({
+              formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','qr_code']
+            });
+          }catch(e){
+            detector = new BarcodeDetector(); // algunos dispositivos ignoran formats
           }
-        });
+        }
 
-        notify(ok ? `Escaneado: ${text}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
-              stopCam();
-            } else {
-              claveEl.value = text;
-              notify(`Detectado: ${text}`, 'ok');
-            }
-          }
-        });
+        const canvas = document.getElementById('scanCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+        let running = true;
         setStatus('escaneando');
 
-        setTimeout(async ()=>{
-          const stream = video.srcObject;
-          if (!stream) return;
-          const track = stream.getVideoTracks()[0];
-          if (track) await applyTrackTweaks(track);
-        }, 500);
+        const loop = async ()=>{
+          if (!cameraActive || !running) return;
+
+          // throttle por tiempo para no saturar CPU
+          const now = Date.now();
+          if (now - lastScanTs < 80){ requestAnimationFrame(loop); return; }
+
+          const vw = video.videoWidth || 0;
+          const vh = video.videoHeight || 0;
+          if (!vw || !vh){ requestAnimationFrame(loop); return; }
+
+          // ROI en pixeles del video: recortamos para detectar más rápido
+          const roi = getRoiRect();
+          const sx = Math.max(0, Math.floor(roi.x * vw));
+          const sy = Math.max(0, Math.floor(roi.y * vh));
+          const sw = Math.min(vw - sx, Math.floor(roi.w * vw));
+          const sh = Math.min(vh - sy, Math.floor(roi.h * vh));
+
+          // canvas del tamaño del ROI
+          canvas.width = Math.max(1, sw);
+          canvas.height = Math.max(1, sh);
+
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+          try{
+            let codeText = '';
+
+            if (detector){
+              const codes = await detector.detect(canvas);
+              if (codes && codes.length){
+                codeText = String(codes[0].rawValue || '').trim();
+              }
+            } else if (window.ZXing){
+              // Fallback ZXing: decode desde canvas (más lento)
+              if (!codeReader){
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                codeReader = new ZXing.BrowserMultiFormatReader(hints, 120);
+              }
+              const result = await codeReader.decodeFromCanvas(canvas);
+              codeText = String(result && (result.getText ? result.getText() : result.text) || '').trim();
+            }
+
+            if (codeText){
+              const now2 = Date.now();
+              if (now2 - lastScanTs < SCAN_COOLDOWN_MS){
+                requestAnimationFrame(loop);
+                return;
+              }
+              if (codeText === lastScanText && (now2 - lastScanTs) < 2500){
+                requestAnimationFrame(loop);
+                return;
+              }
+
+              lastScanTs = now2;
+              lastScanText = codeText;
+
+              lastCode.textContent = codeText;
+              beep(); vibrate();
+
+              if (optAuto.checked){
+                claveEl.value = codeText;
+                const ok = addItemFromInputs({silent:true});
+                notify(ok ? `Escaneado: ${codeText}` : 'No se pudo agregar', ok ? 'ok' : 'bad');
+              } else {
+                claveEl.value = codeText;
+                notify(`Detectado: ${codeText}`, 'ok');
+              }
+            }
+          }catch(e){
+            // silencioso: no interrumpir el loop
+          }
+
+          requestAnimationFrame(loop);
+        };
+
+        requestAnimationFrame(loop);
+
+        // guardamos para stop
+        video.__scannerRunning = () => { running = false; };
 
       }catch(e){
         cameraActive = false;
         setStatus('error');
-        notify('No se pudo abrir cámara', 'bad');
+        notify('No se pudo abrir cámara (requiere HTTPS y permisos)', 'bad');
       }
     }
 
@@ -656,10 +710,12 @@
       if (!cameraActive) return;
       cameraActive = false;
 
+      try{ if (video.__scannerRunning) video.__scannerRunning(); }catch(e){}
+
       try{ if (controls) controls.stop(); }catch(e){}
       controls = null;
 
-      try{ if (codeReader) codeReader.reset(); }catch(e){}
+      try{ if (codeReader && codeReader.reset) codeReader.reset(); }catch(e){}
       codeReader = null;
 
       try{
