@@ -198,6 +198,21 @@
       color:var(--text);
     }
     #catalogInfo{font-size:12px;opacity:.9;}
+
+  /* --- Edit modal --- */
+  .modal-edit{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:9999;padding:16px;}
+  .modal-edit .box{background:#fff;border-radius:18px;max-width:520px;width:100%;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.25);}
+  .modal-edit .mh{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+  .modal-edit .mh .t{font-weight:950;font-size:16px;}
+  .modal-edit .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;}
+  .modal-edit .grid .full{grid-column:1 / -1;}
+  .modal-edit label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .modal-edit input,.modal-edit select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-weight:800;}
+  .modal-edit .row{display:flex;gap:10px;margin-top:14px;}
+  .modal-edit .row button{flex:1;}
+  @media (max-width:520px){ .modal-edit .grid{grid-template-columns:1fr;} }
+  .btn-mini{padding:8px 10px;border-radius:12px;font-weight:900;}
+
 </style>
 </head>
 <body>
@@ -646,6 +661,8 @@
     function escapeHtml(s){
       return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
     }
+    function escapeAttr(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
 
     
     function addItemDirect(code, {silent=false} = {}){
@@ -734,17 +751,105 @@ function addItemFromInputs({silent=false} = {}){
         return;
       }
 
-      let html = `<table><thead><tr><th>Mes</th><th>Clave</th><th>Nombre</th><th style="text-align:center;">Cantidad</th></tr></thead><tbody>`;
+      let html = `<table><thead><tr><th>Mes</th><th>Clave</th><th>Nombre</th><th style="text-align:center;">Cantidad</th><th style="text-align:center; width:70px;">Editar</th></tr></thead><tbody>`;
       for (const r of results){
         html += `<tr>
           <td class="td-cad">${r.caducidad}</td>
           <td class="td-clave">${escapeHtml(r.clave)}</td>
           <td class="td-name">${escapeHtml(r.nombre || '')}</td>
           <td class="td-cant">${r.cantidad}</td>
+          <td style="text-align:center;">
+            <button class="btn-muted btn-mini" type="button" data-act="edit" data-clave="${escapeAttr(r.clave)}" data-mes="${escapeAttr(r.caducidad)}">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+          </td>
         </tr>`;
       }
       html += `</tbody></table>`;
       tablaWrap.innerHTML = html;
+    }
+
+    // --- Editar registro (por Mes + Clave, basado en la tabla agrupada) ---
+    const editModal = document.getElementById('editModal');
+    const editClave = document.getElementById('editClave');
+    const editNombre = document.getElementById('editNombre');
+    const editMes = document.getElementById('editMes');
+    const editCantidad = document.getElementById('editCantidad');
+    const btnEditClose = document.getElementById('btnEditClose');
+    const btnEditCancel = document.getElementById('btnEditCancel');
+    const btnEditSave = document.getElementById('btnEditSave');
+
+    let editCtx = null; // {clave, mes}
+
+    function openEditModal(clave, mes){
+      const { results } = process();
+      const row = results.find(r => String(r.clave)===String(clave) && String(r.caducidad)===String(mes));
+      if (!row){ notify('No se encontró el registro', 'bad'); return; }
+
+      editCtx = { clave: String(clave), mes: String(mes) };
+      editClave.value = row.clave;
+      editNombre.value = row.nombre || (lookupName(row.clave) || '');
+      editMes.value = row.caducidad;
+      editCantidad.value = String(row.cantidad);
+
+      editModal.style.display = 'flex';
+      editModal.setAttribute('aria-hidden','false');
+      setTimeout(()=>{ try{ editCantidad.focus(); editCantidad.select(); }catch(e){} }, 60);
+    }
+
+    function closeEditModal(){
+      editModal.style.display = 'none';
+      editModal.setAttribute('aria-hidden','true');
+      editCtx = null;
+    }
+
+    if (btnEditClose) btnEditClose.addEventListener('click', closeEditModal);
+    if (btnEditCancel) btnEditCancel.addEventListener('click', closeEditModal);
+    if (editModal){
+      editModal.addEventListener('click', (e)=>{ if (e.target === editModal) closeEditModal(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && editModal.style.display==='flex') closeEditModal(); });
+    }
+
+    if (tablaWrap){
+      tablaWrap.addEventListener('click', (e)=>{
+        const b = e.target.closest('[data-act="edit"]');
+        if (!b) return;
+        openEditModal(b.getAttribute('data-clave')||'', b.getAttribute('data-mes')||'');
+      });
+    }
+
+    if (btnEditSave){
+      btnEditSave.addEventListener('click', ()=>{
+        if (!editCtx) return;
+        const newMes = (editMes.value || '').trim();
+        const rawQty = Number(editCantidad.value);
+        const newQty = Number.isFinite(rawQty) ? Math.max(0, Math.floor(rawQty)) : 0;
+
+        const oldClave = editCtx.clave;
+        const oldMes = editCtx.mes;
+
+        // Mantener nombre (o resolver de catálogo)
+        const name = (editNombre.value || lookupName(oldClave) || '').trim();
+
+        // Eliminar todas las entradas que componen ese grupo (clave+mes)
+        items = items.filter(it => !(String(it.clave)===String(oldClave) && String(it.caducidad)===String(oldMes)));
+
+        // Reinsertar si qty > 0
+        if (newQty > 0){
+          items.push({
+            caducidad: newMes || oldMes,
+            clave: oldClave,
+            nombre: name,
+            cantidad: newQty,
+            t: Date.now()
+          });
+        }
+
+        localStorage.setItem('scannerData', JSON.stringify(items));
+        render();
+        closeEditModal();
+        notify(newQty>0 ? 'Registro actualizado' : 'Registro eliminado', newQty>0 ? 'ok' : 'warn');
+      });
     }
 
     btnAgregar.addEventListener('click', ()=>{ unlockAudio(); addItemFromInputs(); });
@@ -1077,5 +1182,46 @@ function addItemFromInputs({silent=false} = {}){
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
     }
   </script>
+
+  <div id="editModal" class="modal-edit" aria-hidden="true">
+    <div class="box" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <div class="mh">
+        <div class="t" id="editTitle"><i class="fa-solid fa-pen-to-square"></i> Editar registro</div>
+        <button class="btn-muted btn-mini" id="btnEditClose" type="button" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="grid">
+        <div class="full">
+          <label>Clave</label>
+          <input id="editClave" type="text" disabled />
+        </div>
+        <div class="full">
+          <label>Nombre</label>
+          <input id="editNombre" type="text" disabled />
+        </div>
+        <div>
+          <label>Mes</label>
+          <select id="editMes">
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+          </select>
+        </div>
+        <div>
+          <label>Cantidad</label>
+          <input id="editCantidad" type="number" min="0" step="1" inputmode="numeric" />
+        </div>
+      </div>
+
+      <div class="hint" style="margin-top:10px;">
+        Tip: Puedes cambiar el mes o ajustar la cantidad total. Si pones 0, se elimina esa clave en ese mes.
+      </div>
+
+      <div class="row">
+        <button class="btn-muted" id="btnEditCancel" type="button"><i class="fa-solid fa-ban"></i> Cancelar</button>
+        <button class="btn-primary" id="btnEditSave" type="button"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
