@@ -172,6 +172,17 @@
       #cameraCard .cam-actions{grid-template-columns:1fr;}
       #cameraCard .toggles{grid-template-columns:1fr;}
     }
+
+    /* v40 catalog */
+    #catalogCard input[type="file"]{
+      width:100%;
+      padding:10px 12px;
+      border:1px dashed rgba(255,255,255,.25);
+      border-radius:12px;
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+    }
+    #catalogInfo{font-size:12px;opacity:.9;}
 </style>
 </head>
 <body>
@@ -180,14 +191,37 @@
       <i class="fa-solid fa-boxes-stacked"></i>
       <div>
         <div class="t">Escáner de Artículos</div>
-        <div style="font-size:12px;opacity:.86;">Versión 3.9</div>
+        <div style="font-size:12px;opacity:.86;">Versión 4.0</div>
       </div>
     </div>
     <div class="h-right" style="display:flex;align-items:center;gap:10px;"><div style="opacity:.9;font-size:12px;">Caducidad + Clave + Cantidad</div><button id="btnMode" class="btn-primary" type="button" style="padding:10px 12px;border-radius:12px;font-size:12px;white-space:nowrap;"><i class="fa-solid fa-toggle-on"></i> Automático</button></div>
   </header>
 
   <div class="container">
-    <section class="card" id="manualCard">
+    
+    <section class="card" id="catalogCard">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-book"></i> Catálogo (CSV)</div>
+        <div class="hint" id="catalogInfo">Sin catálogo cargado</div>
+      </div>
+
+      <div class="filters" style="gap:12px;align-items:end;">
+        <div style="flex:1;min-width:220px;">
+          <label>Importar CSV</label>
+          <input id="catalogFile" type="file" accept=".csv,text/csv" />
+          <div class="hint" style="margin-top:6px;">El CSV debe tener una columna de <b>código</b> y una de <b>nombre</b>. Se detecta automáticamente (code/barcode/clave y nombre/descripcion).</div>
+        </div>
+        <button class="btn-primary" id="btnClearCatalog" type="button" style="min-width:170px;">
+          <i class="fa-solid fa-trash"></i> Borrar catálogo
+        </button>
+      </div>
+
+      <div class="status" style="margin-top:10px;">
+        Escaneado: <b id="scanName">—</b>
+      </div>
+    </section>
+
+<section class="card" id="manualCard">
       <div class="row">
         <div>
           <label>Caducidad (Mes)</label>
@@ -376,6 +410,144 @@
     optSound.addEventListener('change', savePrefs);
     optVib.addEventListener('change', savePrefs);
     loadPrefs();
+
+    // ===== Catálogo CSV =====
+    const catalogFile = document.getElementById('catalogFile');
+    const btnClearCatalog = document.getElementById('btnClearCatalog');
+    const catalogInfo = document.getElementById('catalogInfo');
+    const scanNameEl = document.getElementById('scanName');
+
+    let catalogMap = {};
+    try{ catalogMap = JSON.parse(localStorage.getItem('scannerCatalog') || '{}') || {}; }catch(e){ catalogMap = {}; }
+
+    function catalogCount(){ return Object.keys(catalogMap).length; }
+
+    function setCatalogInfo(){
+      const n = catalogCount();
+      if (catalogInfo) catalogInfo.textContent = n ? `Cargado: ${n} artículos` : 'Sin catálogo cargado';
+    }
+
+    function normalizeCandidates(code){
+      const raw = String(code||'').trim();
+      const candidates = new Set();
+      if (!raw) return [];
+      candidates.add(raw);
+
+      const digits = raw.replace(/\D+/g,'');
+      if (digits) candidates.add(digits);
+      if (digits) candidates.add(digits.replace(/^0+/, ''));
+      if (digits.length === 13 && digits.startsWith('0')) candidates.add(digits.slice(1));
+      if (digits.length === 12) candidates.add('0'+digits);
+      return Array.from(candidates).filter(Boolean);
+    }
+
+    function lookupName(code){
+      const cands = normalizeCandidates(code);
+      for (const c of cands){
+        if (catalogMap[c]) return catalogMap[c];
+      }
+      return '';
+    }
+
+    function showScanName(code){
+      if (!scanNameEl) return;
+      const name = lookupName(code);
+      scanNameEl.textContent = name ? name : 'No encontrado en catálogo';
+    }
+
+    function splitCSVLine(line){
+      const out = [];
+      let cur = '';
+      let inQ = false;
+      for (let i=0;i<line.length;i++){
+        const ch = line[i];
+        if (ch === '"'){
+          if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
+          else inQ = !inQ;
+        }else if (ch === ',' && !inQ){
+          out.push(cur);
+          cur = '';
+        }else{
+          cur += ch;
+        }
+      }
+      out.push(cur);
+      return out.map(s=>s.trim());
+    }
+
+    function detectColumns(headers){
+      const h = headers.map(x=>String(x||'').toLowerCase().trim());
+      const findAny = (keys)=> h.findIndex(v=>keys.some(k=>v===k || v.includes(k)));
+      const codeIdx = findAny(['barcode','bar code','código','codigo','clave','code','sku','ean','upc']);
+      const nameIdx = findAny(['nombre','name','descripcion','descripción','producto','articulo','artículo','item']);
+      return { codeIdx, nameIdx };
+    }
+
+    function parseCatalogCSV(text){
+      const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim().length);
+      if (!lines.length) return {map:{}, rows:0};
+
+      const first = splitCSVLine(lines[0]);
+      let codeIdx = 0, nameIdx = 1, startRow = 0;
+
+      const maybeHeader = first.some(x => /[a-zA-ZáéíóúñÁÉÍÓÚÑ]/.test(x));
+      if (maybeHeader){
+        const det = detectColumns(first);
+        if (det.codeIdx !== -1) codeIdx = det.codeIdx;
+        if (det.nameIdx !== -1) nameIdx = det.nameIdx;
+        startRow = 1;
+      }
+
+      const map = {};
+      let rows = 0;
+
+      for (let i=startRow;i<lines.length;i++){
+        const cols = splitCSVLine(lines[i]);
+        if (!cols.length) continue;
+        const code = (cols[codeIdx] ?? '').trim();
+        const name = (cols[nameIdx] ?? '').trim();
+        if (!code || !name) continue;
+        map[code] = name;
+        rows++;
+      }
+      return {map, rows};
+    }
+
+    async function handleCatalogFile(file){
+      const text = await file.text();
+      const {map, rows} = parseCatalogCSV(text);
+      if (!rows){
+        notify('No se detectaron filas válidas en el CSV', 'bad');
+        return;
+      }
+      catalogMap = map;
+      try{ localStorage.setItem('scannerCatalog', JSON.stringify(catalogMap)); }catch(e){
+        notify('Catálogo demasiado grande para guardar. Reduce filas/columnas.', 'bad');
+      }
+      setCatalogInfo();
+      notify(`Catálogo cargado: ${rows} artículos`, 'ok');
+    }
+
+    if (catalogFile){
+      catalogFile.addEventListener('change', async (e)=>{
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try{ await handleCatalogFile(f); }catch(err){ notify('Error leyendo CSV', 'bad'); }
+        catalogFile.value = '';
+      });
+    }
+
+    if (btnClearCatalog){
+      btnClearCatalog.addEventListener('click', ()=>{
+        catalogMap = {};
+        localStorage.removeItem('scannerCatalog');
+        setCatalogInfo();
+        if (scanNameEl) scanNameEl.textContent = '—';
+        notify('Catálogo borrado', 'warn');
+      });
+    }
+
+
 
     const manualCard = document.getElementById('manualCard');
     const cameraCard = document.getElementById('cameraCard');
@@ -808,6 +980,7 @@ function addItemFromInputs({silent=false} = {}){
               lastScanText = codeText;
 
               lastCode.textContent = codeText;
+              showScanName(codeText);
               beep(); vibrate();
 
               if (optAuto.checked){
