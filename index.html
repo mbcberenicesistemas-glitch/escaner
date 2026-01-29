@@ -394,6 +394,7 @@
     const toastMsg = document.getElementById('toastMsg');
     let toastT = null;
     function notify(msg, type='ok'){
+      if (!toast || !toastMsg) { try{console.log('toast:', msg, type);}catch(e){}; return; }
       toastMsg.textContent = msg;
       toast.className = 'toast show' + (type==='bad' ? ' bad' : type==='warn' ? ' warn' : '');
       clearTimeout(toastT);
@@ -650,6 +651,16 @@
       if (!caducidadAutoEl || !caducidadEl) return;
       caducidadEl.value = caducidadAutoEl.value;
     }
+
+
+    function getCurrentMes(){
+      // Usa el mes del modo visible (auto/manual) para evitar valores vacíos por sincronización
+      if (uiMode === 'auto' && caducidadAutoEl && caducidadAutoEl.value) return caducidadAutoEl.value;
+      if (caducidadEl && caducidadEl.value) return caducidadEl.value;
+      // fallback: intenta el otro
+      if (caducidadAutoEl && caducidadAutoEl.value) return caducidadAutoEl.value;
+      return '';
+    }
     if (caducidadEl) caducidadEl.addEventListener('change', syncCaducidadToAuto);
     if (caducidadAutoEl) caducidadAutoEl.addEventListener('change', ()=>{
       syncCaducidadToManual();
@@ -666,7 +677,7 @@
 
     
     function addItemDirect(code, {silent=false} = {}){
-      const cad = caducidadEl.value;
+      const cad = getCurrentMes();
       const clave = String(code || '').trim();
       const cant = parseInt((cantidadEl.value || '0'), 10);
 
@@ -674,7 +685,9 @@
       if (!clave){ if(!silent) notify('Código vacío', 'bad'); return false; }
       if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
 
-      items.push({ caducidad: cad, clave, nombre: (lookupName(clave)||''), cantidad: cant });
+      const nombre = (lookupName(clave)||'');
+      items.push({ caducidad: cad, clave, nombre, cantidad: cant });
+      showScanName(clave);
       saveData();
       render();
       beep(); vibrate();
@@ -685,7 +698,7 @@
     }
 
 function addItemFromInputs({silent=false} = {}){
-      const cad = caducidadEl.value;
+      const cad = getCurrentMes();
       const clave = (claveEl.value || '').trim();
       const cant = parseInt((cantidadEl.value || '0'), 10);
 
@@ -693,7 +706,9 @@ function addItemFromInputs({silent=false} = {}){
       if (!clave){ if(!silent) notify('Introduce clave', 'bad'); return false; }
       if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
 
-      items.push({ caducidad: cad, clave, nombre: (lookupName(clave)||''), cantidad: cant });
+      const nombre = (lookupName(clave)||'');
+      items.push({ caducidad: cad, clave, nombre, cantidad: cant });
+      showScanName(clave);
       saveData();
       render();
       beep(); vibrate();
