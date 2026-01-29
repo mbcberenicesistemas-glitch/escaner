@@ -228,7 +228,7 @@
   </header>
 
   <div class="container">
-<section class="card" id="manualCard">
+    <section class="card" id="manualCard">
       <div class="row">
         <div>
           <label>Caducidad (Mes)</label>
@@ -239,7 +239,7 @@
         </div>
         <div>
           <label>Clave (Código)</label>
-          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" / enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input id="clave" placeholder="Ej: 750... / CODE128 / ITF" autocomplete="off" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="numeric">
         </div>
         <div>
           <label>Cantidad</label>
@@ -337,24 +337,6 @@
       </div>
     </section>
 
-    <section class="card">
-      <div class="card-h">
-        <div class="ttl"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warn)"></i> Zona de Peligro</div>
-      </div>
-      <div class="danger">
-        <strong>Advertencia:</strong> Esta acción elimina todos los datos guardados en el dispositivo.
-      </div>
-      <div style="margin-top:12px;">
-        <button class="btn-bad" id="btnClearAll" type="button" style="width:100%;"><i class="fa-solid fa-trash"></i> Limpiar Todos los Datos</button>
-      </div>
-    </section>
-  </div>
-
-  <div id="toast" class="toast"><i class="fa-solid fa-circle-check"></i><div id="toastMsg" style="font-weight:950;">OK</div></div>
-
-
-
-    
     <section class="card" id="catalogCard">
       <div class="card-h">
         <div class="ttl"><i class="fa-solid fa-book"></i> Catálogo (CSV)</div>
@@ -377,6 +359,20 @@
       </div>
     </section>
 
+    <section class="card">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warn)"></i> Zona de Peligro</div>
+      </div>
+      <div class="danger">
+        <strong>Advertencia:</strong> Esta acción elimina todos los datos guardados en el dispositivo.
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn-bad" id="btnClearAll" type="button" style="width:100%;"><i class="fa-solid fa-trash"></i> Limpiar Todos los Datos</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"><i class="fa-solid fa-circle-check"></i><div id="toastMsg" style="font-weight:950;">OK</div></div>
 
   <div id="modal" class="modal">
     <div class="box">
@@ -385,6 +381,46 @@
       <div class="actions">
         <button class="btn-muted" id="btnCancel" type="button"><i class="fa-solid fa-xmark"></i> Cancelar</button>
         <button class="btn-bad" id="btnConfirm" type="button"><i class="fa-solid fa-check"></i> Sí, Borrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editModal" class="modal-edit" aria-hidden="true">
+    <div class="box" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <div class="mh">
+        <div class="t" id="editTitle"><i class="fa-solid fa-pen-to-square"></i> Editar registro</div>
+        <button class="btn-muted btn-mini" id="btnEditClose" type="button" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="grid">
+        <div class="full">
+          <label>Clave</label>
+          <input id="editClave" type="text" />
+        </div>
+        <div class="full">
+          <label>Nombre</label>
+          <input id="editNombre" type="text" />
+        </div>
+        <div>
+          <label>Mes</label>
+          <select id="editMes">
+            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
+            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+          </select>
+        </div>
+        <div>
+          <label>Cantidad</label>
+          <input id="editCantidad" type="number" min="0" step="1" inputmode="numeric" />
+        </div>
+      </div>
+
+      <div class="hint" style="margin-top:10px;">
+        Tip: Puedes cambiar el mes o ajustar la cantidad total. Si pones 0, se elimina esa clave en ese mes.
+      </div>
+
+      <div class="row">
+        <button class="btn-muted" id="btnEditCancel" type="button"><i class="fa-solid fa-ban"></i> Cancelar</button>
+        <button class="btn-primary" id="btnEditSave" type="button"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
       </div>
     </div>
   </div>
@@ -452,26 +488,91 @@
     const scanNameEl = document.getElementById('scanName');
 
     let catalogMap = {};
-    try{ catalogMap = JSON.parse(localStorage.getItem('scannerCatalog') || '{}') || {}; }catch(e){ catalogMap = {}; }
+    let catalogFileName = '';
+    
+    // Cargar catálogo desde localStorage al iniciar
+    function loadCatalogFromStorage() {
+      try { 
+        catalogMap = JSON.parse(localStorage.getItem('scannerCatalog') || '{}') || {}; 
+        catalogFileName = localStorage.getItem('scannerCatalogFileName') || '';
+      } catch(e) { 
+        catalogMap = {}; 
+        catalogFileName = '';
+      }
+    }
+    
+    function saveCatalogToStorage(fileName = '') {
+      try { 
+        localStorage.setItem('scannerCatalog', JSON.stringify(catalogMap));
+        if (fileName) {
+          localStorage.setItem('scannerCatalogFileName', fileName);
+          catalogFileName = fileName;
+        }
+      } catch(e) {
+        notify('Error al guardar catálogo', 'bad');
+      }
+    }
 
     function catalogCount(){ return Object.keys(catalogMap).length; }
 
     function setCatalogInfo(){
       const n = catalogCount();
-      if (catalogInfo) catalogInfo.textContent = n ? `Cargado: ${n} artículos` : 'Sin catálogo cargado';
+      let info = 'Sin catálogo cargado';
+      if (n) {
+        if (catalogFileName) {
+          info = `Cargado: ${n} artículos (${catalogFileName})`;
+        } else {
+          info = `Cargado: ${n} artículos`;
+        }
+      }
+      if (catalogInfo) catalogInfo.textContent = info;
     }
 
+    // Función mejorada para normalizar códigos con ceros a la izquierda
     function normalizeCandidates(code){
       const raw = String(code||'').trim();
       const candidates = new Set();
       if (!raw) return [];
+      
+      // Agregar el código original
       candidates.add(raw);
-
-      const digits = raw.replace(/\D+/g,'');
-      if (digits) candidates.add(digits);
-      if (digits) candidates.add(digits.replace(/^0+/, ''));
-      if (digits.length === 13 && digits.startsWith('0')) candidates.add(digits.slice(1));
-      if (digits.length === 12) candidates.add('0'+digits);
+      
+      // Extraer solo dígitos
+      const digits = raw.replace(/\D+/g, '');
+      if (digits) {
+        candidates.add(digits);
+        
+        // Normalizar ceros a la izquierda - múltiples variaciones
+        const sinCeros = digits.replace(/^0+/, '');
+        if (sinCeros) {
+          candidates.add(sinCeros);
+        }
+        
+        // Para códigos numéricos, generar variaciones con diferentes longitudes
+        if (/^\d+$/.test(digits)) {
+          // Longitudes comunes de códigos de barras
+          const lengths = [8, 12, 13, 14];
+          for (const len of lengths) {
+            if (sinCeros.length <= len) {
+              const padded = sinCeros.padStart(len, '0');
+              candidates.add(padded);
+            }
+            if (digits.length <= len) {
+              const paddedOrig = digits.padStart(len, '0');
+              candidates.add(paddedOrig);
+            }
+          }
+          
+          // Caso especial: EAN13 (13 dígitos)
+          if (digits.length === 12) {
+            candidates.add('0' + digits);
+          }
+          if (digits.length === 13 && digits.startsWith('0')) {
+            candidates.add(digits.slice(1));
+          }
+        }
+      }
+      
       return Array.from(candidates).filter(Boolean);
     }
 
@@ -541,7 +642,10 @@
         const code = (cols[codeIdx] ?? '').trim();
         const name = (cols[nameIdx] ?? '').trim();
         if (!code || !name) continue;
-        map[code] = name;
+        
+        // Normalizar el código para guardarlo sin ceros a la izquierda (forma canónica)
+        const normalizedCode = code.replace(/^0+/, '') || code;
+        map[normalizedCode] = name;
         rows++;
       }
       return {map, rows};
@@ -555,9 +659,7 @@
         return;
       }
       catalogMap = map;
-      try{ localStorage.setItem('scannerCatalog', JSON.stringify(catalogMap)); }catch(e){
-        notify('Catálogo demasiado grande para guardar. Reduce filas/columnas.', 'bad');
-      }
+      saveCatalogToStorage(file.name);
       setCatalogInfo();
       notify(`Catálogo cargado: ${rows} artículos`, 'ok');
     }
@@ -575,13 +677,13 @@
       btnClearCatalog.addEventListener('click', ()=>{
         catalogMap = {};
         localStorage.removeItem('scannerCatalog');
+        localStorage.removeItem('scannerCatalogFileName');
+        catalogFileName = '';
         setCatalogInfo();
         if (scanNameEl) scanNameEl.textContent = '—';
         notify('Catálogo borrado', 'warn');
       });
     }
-
-
 
     const manualCard = document.getElementById('manualCard');
     const cameraCard = document.getElementById('cameraCard');
@@ -621,8 +723,6 @@
       });
     }
 
-
-
     const caducidadEl = document.getElementById('caducidad');
     const caducidadAutoEl = document.getElementById('caducidadAuto');
     const claveEl = document.getElementById('clave');
@@ -652,7 +752,6 @@
       caducidadEl.value = caducidadAutoEl.value;
     }
 
-
     function getCurrentMes(){
       // Usa el mes del modo visible (auto/manual) para evitar valores vacíos por sincronización
       if (uiMode === 'auto' && caducidadAutoEl && caducidadAutoEl.value) return caducidadAutoEl.value;
@@ -661,24 +760,34 @@
       if (caducidadAutoEl && caducidadAutoEl.value) return caducidadAutoEl.value;
       return '';
     }
+    
     if (caducidadEl) caducidadEl.addEventListener('change', syncCaducidadToAuto);
     if (caducidadAutoEl) caducidadAutoEl.addEventListener('change', ()=>{
       syncCaducidadToManual();
       notify('Mes actualizado', 'ok');
     });
 
-
     function saveData(){ localStorage.setItem('scannerData', JSON.stringify(items)); }
+    
     function escapeHtml(s){
       return (s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
     }
+    
     function escapeAttr(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'",'&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 
+    // Función para normalizar claves al agregar (eliminar ceros a la izquierda)
+    function normalizeKey(key) {
+      const str = String(key || '').trim();
+      // Para códigos numéricos, eliminar ceros a la izquierda
+      if (/^\d+$/.test(str)) {
+        return str.replace(/^0+/, '') || '0';
+      }
+      return str;
+    }
 
-    
     function addItemDirect(code, {silent=false} = {}){
       const cad = getCurrentMes();
-      const clave = String(code || '').trim();
+      const clave = normalizeKey(code);
       const cant = parseInt((cantidadEl.value || '0'), 10);
 
       if (!cad){ if(!silent) notify('Selecciona caducidad', 'bad'); return false; }
@@ -697,9 +806,9 @@
       return true;
     }
 
-function addItemFromInputs({silent=false} = {}){
+    function addItemFromInputs({silent=false} = {}){
       const cad = getCurrentMes();
-      const clave = (claveEl.value || '').trim();
+      const clave = normalizeKey(claveEl.value);
       const cant = parseInt((cantidadEl.value || '0'), 10);
 
       if (!cad){ if(!silent) notify('Selecciona caducidad', 'bad'); return false; }
@@ -723,7 +832,10 @@ function addItemFromInputs({silent=false} = {}){
 
     function process(){
       let filtered = items.slice();
-      if (curFilterClave) filtered = filtered.filter(i => i.clave.toLowerCase().includes(curFilterClave.toLowerCase()));
+      if (curFilterClave) {
+        const filterNormalized = normalizeKey(curFilterClave);
+        filtered = filtered.filter(i => normalizeKey(i.clave).includes(filterNormalized));
+      }
       if (curFilterCad) filtered = filtered.filter(i => i.caducidad.toLowerCase() === curFilterCad.toLowerCase());
 
       const grouped = {};
@@ -731,15 +843,16 @@ function addItemFromInputs({silent=false} = {}){
       const uniq = new Set();
 
       for (const it of filtered){
-        const k = it.clave + '|' + it.caducidad;
-        if (!grouped[k]) grouped[k] = { caducidad: it.caducidad, clave: it.clave, nombre: '', cantidad: 0 };
+        const normalizedKey = normalizeKey(it.clave);
+        const k = normalizedKey + '|' + it.caducidad;
+        if (!grouped[k]) grouped[k] = { caducidad: it.caducidad, clave: normalizedKey, nombre: '', cantidad: 0 };
         grouped[k].cantidad += it.cantidad;
         if (!grouped[k].nombre){
-          const n = (it.nombre || lookupName(it.clave) || '').trim();
+          const n = (it.nombre || lookupName(normalizedKey) || '').trim();
           if (n) grouped[k].nombre = n;
         }
         units += it.cantidad;
-        uniq.add(it.clave);
+        uniq.add(normalizedKey);
       }
 
       const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -798,7 +911,7 @@ function addItemFromInputs({silent=false} = {}){
 
     function openEditModal(clave, mes){
       const { results } = process();
-      const row = results.find(r => String(r.clave)===String(clave) && String(r.caducidad)===String(mes));
+      const row = results.find(r => normalizeKey(r.clave) === normalizeKey(clave) && String(r.caducidad) === String(mes));
       if (!row){ notify('No se encontró el registro', 'bad'); return; }
 
       editCtx = { clave: String(clave), mes: String(mes) };
@@ -818,6 +931,7 @@ function addItemFromInputs({silent=false} = {}){
       editCtx = null;
     }
 
+    // Event listeners para el modal de edición
     if (btnEditClose) btnEditClose.addEventListener('click', closeEditModal);
     if (btnEditCancel) btnEditCancel.addEventListener('click', closeEditModal);
     if (editModal){
@@ -825,6 +939,7 @@ function addItemFromInputs({silent=false} = {}){
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && editModal.style.display==='flex') closeEditModal(); });
     }
 
+    // Delegación de eventos para los botones de editar en la tabla
     if (tablaWrap){
       tablaWrap.addEventListener('click', (e)=>{
         const b = e.target.closest('[data-act="edit"]');
@@ -833,27 +948,29 @@ function addItemFromInputs({silent=false} = {}){
       });
     }
 
+    // Guardar cambios en la edición
     if (btnEditSave){
       btnEditSave.addEventListener('click', ()=>{
         if (!editCtx) return;
         const newMes = (editMes.value || '').trim();
         const rawQty = Number(editCantidad.value);
         const newQty = Number.isFinite(rawQty) ? Math.max(0, Math.floor(rawQty)) : 0;
+        const newClave = normalizeKey(editClave.value);
 
         const oldClave = editCtx.clave;
         const oldMes = editCtx.mes;
 
         // Mantener nombre (o resolver de catálogo)
-        const name = (editNombre.value || lookupName(oldClave) || '').trim();
+        const name = (editNombre.value || lookupName(newClave) || '').trim();
 
-        // Eliminar todas las entradas que componen ese grupo (clave+mes)
-        items = items.filter(it => !(String(it.clave)===String(oldClave) && String(it.caducidad)===String(oldMes)));
+        // Eliminar todas las entradas que componen ese grupo (clave+mes original)
+        items = items.filter(it => !(normalizeKey(it.clave) === normalizeKey(oldClave) && String(it.caducidad) === String(oldMes)));
 
         // Reinsertar si qty > 0
         if (newQty > 0){
           items.push({
             caducidad: newMes || oldMes,
-            clave: oldClave,
+            clave: newClave,
             nombre: name,
             cantidad: newQty,
             t: Date.now()
@@ -869,15 +986,6 @@ function addItemFromInputs({silent=false} = {}){
 
     btnAgregar.addEventListener('click', ()=>{ unlockAudio(); addItemFromInputs(); });
     claveEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ unlockAudio(); addItemFromInputs(); } });
-    // Muchos lectores físicos envían ENTER al final. Si el foco está en Clave, agregamos.
-    document.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter' && document.activeElement === claveEl){
-        e.preventDefault();
-        unlockAudio();
-        addItemFromInputs();
-      }
-    });
-
 
     btnFiltrar.addEventListener('click', ()=>{
       curFilterClave = (fClave.value||'').trim();
@@ -895,11 +1003,9 @@ function addItemFromInputs({silent=false} = {}){
     document.getElementById('btnExport').addEventListener('click', ()=>{
       const { results } = process();
       if (!results.length){ notify('No hay datos para exportar', 'bad'); return; }
-      let csv = "Mes,Clave,Nombre,Cantidad
-";
+      let csv = "Mes,Clave,Nombre,Cantidad\n";
       for (const r of results){
-        csv += `"${r.caducidad}","${String(r.clave).replaceAll('"','""')}","${String(r.nombre||'').replaceAll('"','""')}",${r.cantidad}
-`;
+        csv += `"${r.caducidad}","${String(r.clave).replaceAll('"','""')}","${String(r.nombre||'').replaceAll('"','""')}",${r.cantidad}\n`;
       }
       const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
       const url = URL.createObjectURL(blob);
@@ -981,7 +1087,6 @@ function addItemFromInputs({silent=false} = {}){
       const pad = 0.03;
       return (nx >= roi.x - pad && nx <= roi.x + roi.w + pad && ny >= roi.y - pad && ny <= roi.y + roi.h + pad);
     }
-
 
     async function applyTrackTweaks(track){
       try{
@@ -1067,7 +1172,6 @@ function addItemFromInputs({silent=false} = {}){
         // Evitar 'brinco' por ajustes del navegador al actualizar UI
         let lockedScrollY = window.scrollY;
         const lockScroll = ()=>{ if (uiMode === 'auto') window.scrollTo(0, lockedScrollY); };
-
 
         const loop = async ()=>{
           if (!cameraActive || !running) return;
@@ -1191,52 +1295,16 @@ function addItemFromInputs({silent=false} = {}){
     btnTorch.addEventListener('click', toggleTorch);
     document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopCam(); });
 
+    // Cargar catálogo al iniciar
+    loadCatalogFromStorage();
+    setCatalogInfo();
     render();
+    applyMode();
 
     if ('serviceWorker' in navigator){
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
     }
   </script>
-
-  <div id="editModal" class="modal-edit" aria-hidden="true">
-    <div class="box" role="dialog" aria-modal="true" aria-labelledby="editTitle">
-      <div class="mh">
-        <div class="t" id="editTitle"><i class="fa-solid fa-pen-to-square"></i> Editar registro</div>
-        <button class="btn-muted btn-mini" id="btnEditClose" type="button" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="grid">
-        <div class="full">
-          <label>Clave</label>
-          <input id="editClave" type="text" disabled />
-        </div>
-        <div class="full">
-          <label>Nombre</label>
-          <input id="editNombre" type="text" disabled />
-        </div>
-        <div>
-          <label>Mes</label>
-          <select id="editMes">
-            <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
-            <option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
-          </select>
-        </div>
-        <div>
-          <label>Cantidad</label>
-          <input id="editCantidad" type="number" min="0" step="1" inputmode="numeric" />
-        </div>
-      </div>
-
-      <div class="hint" style="margin-top:10px;">
-        Tip: Puedes cambiar el mes o ajustar la cantidad total. Si pones 0, se elimina esa clave en ese mes.
-      </div>
-
-      <div class="row">
-        <button class="btn-muted" id="btnEditCancel" type="button"><i class="fa-solid fa-ban"></i> Cancelar</button>
-        <button class="btn-primary" id="btnEditSave" type="button"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
-      </div>
-    </div>
-  </div>
 
 </body>
 </html>
