@@ -101,11 +101,12 @@
     .filters > div{min-width:220px}
     .actions-right{display:flex;gap:10px;flex-wrap:wrap}
     .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
-    table{width:100%;border-collapse:collapse;min-width:560px}
+    table{width:100%;border-collapse:collapse;min-width:760px}
     th,td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left}
     th{background:#f7f9fb;font-weight:950;color:#1f2a37}
     .td-cad{font-weight:950;color:var(--bad)}
     .td-clave{font-weight:950}
+    .td-name{color:var(--text);max-width:520px;}
     .td-cant{text-align:center;font-weight:950;color:var(--ok)}
     .summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-weight:850}
 
@@ -212,29 +213,6 @@
   </header>
 
   <div class="container">
-    
-    <section class="card" id="catalogCard">
-      <div class="card-h">
-        <div class="ttl"><i class="fa-solid fa-book"></i> Catálogo (CSV)</div>
-        <div class="hint" id="catalogInfo">Sin catálogo cargado</div>
-      </div>
-
-      <div class="filters" style="gap:12px;align-items:end;">
-        <div style="flex:1;min-width:220px;">
-          <label>Importar CSV</label>
-          <input id="catalogFile" type="file" accept=".csv,text/csv" />
-          <div class="hint" style="margin-top:6px;">El CSV debe tener una columna de <b>código</b> y una de <b>nombre</b>. Se detecta automáticamente (code/barcode/clave y nombre/descripcion).</div>
-        </div>
-        <button class="btn-primary" id="btnClearCatalog" type="button" style="min-width:170px;">
-          <i class="fa-solid fa-trash"></i> Borrar catálogo
-        </button>
-      </div>
-
-      <div class="status" style="margin-top:10px;">
-        Escaneado: <b id="scanName">—</b>
-      </div>
-    </section>
-
 <section class="card" id="manualCard">
       <div class="row">
         <div>
@@ -316,7 +294,7 @@
           <input id="fClave" placeholder="Ej: 750" />
         </div>
         <div>
-          <label>Filtrar por Caducidad</label>
+          <label>Filtrar por Mes</label>
           <select id="fCad">
             <option value="">Todos</option>
             <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option>
@@ -358,6 +336,32 @@
   </div>
 
   <div id="toast" class="toast"><i class="fa-solid fa-circle-check"></i><div id="toastMsg" style="font-weight:950;">OK</div></div>
+
+
+
+    
+    <section class="card" id="catalogCard">
+      <div class="card-h">
+        <div class="ttl"><i class="fa-solid fa-book"></i> Catálogo (CSV)</div>
+        <div class="hint" id="catalogInfo">Sin catálogo cargado</div>
+      </div>
+
+      <div class="filters" style="gap:12px;align-items:end;">
+        <div style="flex:1;min-width:220px;">
+          <label>Importar CSV</label>
+          <input id="catalogFile" type="file" accept=".csv,text/csv" />
+          <div class="hint" style="margin-top:6px;">El CSV debe tener una columna de <b>código</b> y una de <b>nombre</b>. Se detecta automáticamente (code/barcode/clave y nombre/descripcion).</div>
+        </div>
+        <button class="btn-primary" id="btnClearCatalog" type="button" style="min-width:170px;">
+          <i class="fa-solid fa-trash"></i> Borrar catálogo
+        </button>
+      </div>
+
+      <div class="status" style="margin-top:10px;">
+        Escaneado: <b id="scanName">—</b>
+      </div>
+    </section>
+
 
   <div id="modal" class="modal">
     <div class="box">
@@ -653,7 +657,7 @@
       if (!clave){ if(!silent) notify('Código vacío', 'bad'); return false; }
       if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
 
-      items.push({ caducidad: cad, clave, cantidad: cant });
+      items.push({ caducidad: cad, clave, nombre: (lookupName(clave)||''), cantidad: cant });
       saveData();
       render();
       beep(); vibrate();
@@ -672,7 +676,7 @@ function addItemFromInputs({silent=false} = {}){
       if (!clave){ if(!silent) notify('Introduce clave', 'bad'); return false; }
       if (!cant || isNaN(cant) || cant <= 0){ if(!silent) notify('Cantidad inválida', 'bad'); return false; }
 
-      items.push({ caducidad: cad, clave, cantidad: cant });
+      items.push({ caducidad: cad, clave, nombre: (lookupName(clave)||''), cantidad: cant });
       saveData();
       render();
       beep(); vibrate();
@@ -696,8 +700,12 @@ function addItemFromInputs({silent=false} = {}){
 
       for (const it of filtered){
         const k = it.clave + '|' + it.caducidad;
-        if (!grouped[k]) grouped[k] = { caducidad: it.caducidad, clave: it.clave, cantidad: 0 };
+        if (!grouped[k]) grouped[k] = { caducidad: it.caducidad, clave: it.clave, nombre: '', cantidad: 0 };
         grouped[k].cantidad += it.cantidad;
+        if (!grouped[k].nombre){
+          const n = (it.nombre || lookupName(it.clave) || '').trim();
+          if (n) grouped[k].nombre = n;
+        }
         units += it.cantidad;
         uniq.add(it.clave);
       }
@@ -726,11 +734,12 @@ function addItemFromInputs({silent=false} = {}){
         return;
       }
 
-      let html = `<table><thead><tr><th>Caducidad</th><th>Clave</th><th style="text-align:center;">Cantidad</th></tr></thead><tbody>`;
+      let html = `<table><thead><tr><th>Mes</th><th>Clave</th><th>Nombre</th><th style="text-align:center;">Cantidad</th></tr></thead><tbody>`;
       for (const r of results){
         html += `<tr>
           <td class="td-cad">${r.caducidad}</td>
           <td class="td-clave">${escapeHtml(r.clave)}</td>
+          <td class="td-name">${escapeHtml(r.nombre || '')}</td>
           <td class="td-cant">${r.cantidad}</td>
         </tr>`;
       }
@@ -766,9 +775,11 @@ function addItemFromInputs({silent=false} = {}){
     document.getElementById('btnExport').addEventListener('click', ()=>{
       const { results } = process();
       if (!results.length){ notify('No hay datos para exportar', 'bad'); return; }
-      let csv = "Caducidad,Clave,Cantidad\n";
+      let csv = "Mes,Clave,Nombre,Cantidad
+";
       for (const r of results){
-        csv += `"${r.caducidad}","${String(r.clave).replaceAll('"','""')}",${r.cantidad}\n`;
+        csv += `"${r.caducidad}","${String(r.clave).replaceAll('"','""')}","${String(r.nombre||'').replaceAll('"','""')}",${r.cantidad}
+`;
       }
       const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
       const url = URL.createObjectURL(blob);
