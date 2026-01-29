@@ -134,6 +134,20 @@
 
     @media (max-width: 920px){ .row{grid-template-columns:1fr 1fr} }
     @media (max-width: 560px){ .row{grid-template-columns:1fr} .video-wrap{aspect-ratio:4/3} }
+    
+    /* --- v4.0.1 fixes: mobile layout + botones --- */
+    @media (max-width: 560px){
+      .filters > div{min-width:0 !important;flex:1 1 100%;}
+      .cam-actions{flex-direction:column;align-items:stretch;}
+      .cam-actions .stop,.cam-actions #btnTorch{width:100%;min-width:0 !important;}
+    }
+    @media (max-width: 420px){
+      header{gap:8px !important;}
+      .h-left .t{font-size:18px !important;}
+      #btnMode{padding:8px 10px !important;border-radius:10px !important;font-size:12px !important;}
+      .h-right > div{display:none;} /* oculta la leyenda larga en pantallas muy chicas */
+    }
+
     .hidden{display:none !important;}
     .mode-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.10);font-weight:900;font-size:12px;}
 
@@ -794,7 +808,9 @@ function addItemFromInputs({silent=false} = {}){
     let codeReader = null;
     let lastScanTs = 0;
     let lastScanText = '';
-    const SCAN_COOLDOWN_MS = 650; // evita doble lectura
+    const SCAN_COOLDOWN_MS = 650;
+    const SCAN_LOCK_MS = 900; // evita lecturas repetidas en ráfaga
+    let scanLockUntil = 0; // evita doble lectura
 
     let controls = null;
     let cameraActive = false;
@@ -925,6 +941,9 @@ function addItemFromInputs({silent=false} = {}){
         const loop = async ()=>{
           if (!cameraActive || !running) return;
 
+          // Lock temporal para evitar dobles lecturas
+          if (Date.now() < scanLockUntil){ requestAnimationFrame(loop); return; }
+
           // throttle por tiempo para no saturar CPU
           const now = Date.now();
           if (now - lastScanTs < 80){ requestAnimationFrame(loop); return; }
@@ -978,6 +997,7 @@ function addItemFromInputs({silent=false} = {}){
 
               lastScanTs = now2;
               lastScanText = codeText;
+              scanLockUntil = now2 + SCAN_LOCK_MS;
 
               lastCode.textContent = codeText;
               showScanName(codeText);
